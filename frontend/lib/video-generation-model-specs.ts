@@ -435,9 +435,22 @@ const PIPELINE_DISPLAY_NAMES: Record<string, string> = {
   'ltx-2.5-fast': 'LTX 2.5 Fast',
 }
 
+/** OpenRouter fork: "or:<model-id>" pipelines render their catalog name from the id. */
+export function isOpenRouterPipeline(model: string | undefined | null): boolean {
+  return typeof model === 'string' && model.startsWith('or:')
+}
+
 /** Returns a display label for a known video pipeline, or null if unknown/absent. */
 export function formatPipelineDisplayName(model: string | undefined | null): string | null {
   if (!model) return null
+  if (isOpenRouterPipeline(model)) {
+    // "or:bytedance/seedance-2.0-mini" -> "Seedance 2.0 Mini"
+    const tail = model.slice(3).split('/').pop() ?? model.slice(3)
+    return tail
+      .split(/[-_]/)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ')
+  }
   return PIPELINE_DISPLAY_NAMES[model] ?? null
 }
 

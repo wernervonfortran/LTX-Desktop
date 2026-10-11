@@ -63,6 +63,7 @@ def _build_schema() -> dict[str, object]:
             text_encoder=cast(Any, fake.text_encoder),
             task_runner=cast(Any, fake.task_runner),
             ltx_api_client=cast(Any, fake.ltx_api_client),
+            openrouter_client=cast(Any, fake.openrouter_client),
             zit_api_client=cast(Any, fake.zit_api_client),
             fast_video_pipeline_class=cast(Any, type(fake.fast_video_pipeline)),
             image_generation_pipeline_class=cast(Any, type(fake.image_generation_pipeline)),

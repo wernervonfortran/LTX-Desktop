@@ -27,6 +27,7 @@ from services.features.video.text_to_video import (
     require_supported_contract_version,
 )
 from runtime_config.model_download_specs import local_aspect_ratios
+from runtime_config.openrouter_specs import is_openrouter_pipeline
 from services.generation_interrupt import GenerationCancelledError, is_cancel_exception
 from services.generation_queue.types import OutputAllocation, OutputPlan
 from services.records import AssetRecord, GenerationRecord
@@ -99,10 +100,13 @@ class ImageToVideoExecutor:
         if end is not None:
             request_payload["lastImagePath"] = end.path
         output = require_video_output(outputs)
+        openrouter_model = is_openrouter_pipeline(str(request_payload.get("model", "")))
         try:
             # Inside the try so a resolution with no local cell becomes a capability
             # failure, the same as generate_local_reserved's pixel lookup.
-            request_payload["aspectRatio"] = _resolve_aspect_ratio(params, start)
+            request_payload["aspectRatio"] = _resolve_aspect_ratio(
+                params, start, openrouter=openrouter_model
+            )
             req = GenerateVideoRequest.model_validate(request_payload)
             if self._lora_resolver is not None:
                 # Inside the try so a missing/removed adapter becomes a capability failure.
@@ -112,8 +116,12 @@ class ImageToVideoExecutor:
                 generation_id=generation.id,
                 output_path=Path(output.dest_path),
                 prompt_wrap=self._prompt_wrap,
-                local_model_id=resolve_job_local_model_id(
-                    self._video_generation.models_dir, offering
+                local_model_id=(
+                    None
+                    if openrouter_model
+                    else resolve_job_local_model_id(
+                        self._video_generation.models_dir, offering
+                    )
                 ),
             )
         except Exception as exc:
@@ -179,7 +187,7 @@ def parse_aspect_ratio(option: str) -> float | None:
 
 
 def _resolve_aspect_ratio(
-    params: ImageToVideoParams, start: AssetRecord
+    params: ImageToVideoParams, start: AssetRecord, *, openrouter: bool = False
 ) -> str:
     if params.aspectRatio != "auto":
         return params.aspectRatio
@@ -187,7 +195,12 @@ def _resolve_aspect_ratio(
     if metadata.mediaType != "image":
         raise ValueError("startFrame must have image metadata")
     try:
-        options = local_aspect_ratios(params.resolution, is_a2v=False)
+        if openrouter:
+            # OpenRouter fork: no local pixel map; pick the closest standard ratio and
+            # let the handler validate it against the live model catalog.
+            options: Sequence[str] = ["21:9", "16:9", "3:2", "4:3", "1:1", "4:5", "9:16"]
+        else:
+            options = local_aspect_ratios(params.resolution, is_a2v=False)
     except KeyError as exc:
         raise HTTPError(400, "INVALID_LOCAL_RESOLUTION") from exc
     return find_closest_aspect_ratio_option(

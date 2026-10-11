@@ -36,6 +36,9 @@ interface GapGenerationModalProps {
   gapCanGenerateVideo: boolean
   gapImageFile: File | null
   setGapImageFile: (file: File | null) => void
+  // OpenRouter fork: the effective conditioning frames chosen in this modal
+  // ({start,end} file paths or data: URLs); consumed by handleGapGenerate.
+  setGapFrameSelection: (sel: { start: string | null; end: string | null }) => void
   gapImageInputRef: React.RefObject<HTMLInputElement>
   isRegenerating: boolean
   regenStatusMessage: string
@@ -68,6 +71,7 @@ export function GapGenerationModal({
   gapCanGenerateVideo,
   gapImageFile,
   setGapImageFile,
+  setGapFrameSelection,
   gapImageInputRef,
   isRegenerating,
   regenStatusMessage,
@@ -134,6 +138,43 @@ export function GapGenerationModal({
   const displayedBeforeFrame = startFrameOverride ?? gapBeforeFrame
   const displayedAfterFrame = endFrameOverride ?? gapAfterFrame
 
+  // OpenRouter fork: does the currently selected gap model accept a last frame?
+  const selectedModelSpec = gapVideoModelSpecs.find((item) => item.pipeline === gapSettings.model)
+  const modelSupportsLastFrame = Boolean(selectedModelSpec?.spec.capabilities?.last_frame)
+
+  // Both frames at once when the model supports first+last conditioning.
+  const bothFramesEnabled = startFrameEnabled && endFrameEnabled
+  const toggleFrame = (which: 'start' | 'end') => {
+    if (which === 'start') {
+      if (startFrameEnabled && !endFrameEnabled) setStartFrameEnabled(false)
+      else { setStartFrameEnabled(true); setEndFrameEnabled(false) }
+    } else {
+      if (endFrameEnabled && !startFrameEnabled) setEndFrameEnabled(false)
+      else { setEndFrameEnabled(true); setStartFrameEnabled(false) }
+    }
+  }
+  const toggleBoth = () => {
+    if (bothFramesEnabled) { setStartFrameEnabled(true); setEndFrameEnabled(false) }
+    else { setStartFrameEnabled(true); setEndFrameEnabled(true) }
+  }
+
+  // Publish the effective conditioning frames to the parent so handleGapGenerate
+  // passes them as imagePath/lastImagePath (the pre-fork code ignored them and
+  // generated text-to-video from an LLM description instead — the gap bug).
+  useEffect(() => {
+    if (!isVideoMode) {
+      setGapFrameSelection({ start: null, end: null })
+      return
+    }
+    setGapFrameSelection({
+      start: startFrameEnabled ? (startFrameOverride ?? gapBeforeFrame) : null,
+      end: endFrameEnabled ? (endFrameOverride ?? gapAfterFrame) : null,
+    })
+  }, [
+    gapGenerateMode, isVideoMode, startFrameEnabled, endFrameEnabled,
+    startFrameOverride, endFrameOverride, gapBeforeFrame, gapAfterFrame, setGapFrameSelection,
+  ])
+
   const handleFrameFileChange = (
     e: React.ChangeEvent<HTMLInputElement>,
     setter: (v: string | null) => void,
@@ -189,10 +230,17 @@ export function GapGenerationModal({
                     <Info className="h-3 w-3 text-fg-tertiary cursor-help" />
                     <div className="absolute left-0 top-full mt-2 w-60 p-2.5 bg-action border border-separator rounded-lg text-[10px] text-fg-secondary leading-relaxed invisible group-hover/info:visible opacity-0 group-hover/info:opacity-100 transition-opacity pointer-events-none shadow-xl z-20">
                       {isVideoMode ? (
-                        <>
-                          <p>Only one conditioning frame can be used at a time.</p>
-                          <p className="mt-1.5">If <strong className="text-fg-primary">End frame</strong> is selected, it will be treated as the start frame, since the model does not currently support generating from an end frame. The video will then be generated from that frame and played in reverse.</p>
-                        </>
+                        modelSupportsLastFrame ? (
+                          <>
+                            <p>The selected model supports first- and last-frame conditioning.</p>
+                            <p className="mt-1.5">Pick <strong className="text-fg-primary">Start</strong>, <strong className="text-fg-primary">End</strong>, or <strong className="text-fg-primary">Both</strong> — the chosen frames condition generation directly.</p>
+                          </>
+                        ) : (
+                          <>
+                            <p>Only one conditioning frame can be used at a time.</p>
+                            <p className="mt-1.5">If <strong className="text-fg-primary">End frame</strong> is selected, it will be treated as the start frame, since this model does not support generating from an end frame. The video will then be generated from that frame and played in reverse.</p>
+                          </>
+                        )
                       ) : (
                         <p>Select frames from adjacent clips to provide context for the prompt.</p>
                       )}
@@ -202,17 +250,27 @@ export function GapGenerationModal({
                 {/* Segmented toggle */}
                 <div className="flex bg-action rounded-lg p-0.5 gap-0.5">
                   <button
-                    onClick={() => { if (startFrameEnabled) { setStartFrameEnabled(false) } else { setStartFrameEnabled(true); setEndFrameEnabled(false) } }}
+                    onClick={() => toggleFrame('start')}
                     className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
-                      startFrameEnabled ? 'bg-action-active text-fg-primary shadow-sm' : 'text-fg-tertiary hover:text-fg-secondary'
+                      startFrameEnabled && !endFrameEnabled ? 'bg-action-active text-fg-primary shadow-sm' : 'text-fg-tertiary hover:text-fg-secondary'
                     }`}
                   >
                     Start frame
                   </button>
+                  {modelSupportsLastFrame && (
+                    <button
+                      onClick={toggleBoth}
+                      className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                        bothFramesEnabled ? 'bg-action-active text-fg-primary shadow-sm' : 'text-fg-tertiary hover:text-fg-secondary'
+                      }`}
+                    >
+                      Both
+                    </button>
+                  )}
                   <button
-                    onClick={() => { if (endFrameEnabled) { setEndFrameEnabled(false) } else { setEndFrameEnabled(true); setStartFrameEnabled(false) } }}
+                    onClick={() => toggleFrame('end')}
                     className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
-                      endFrameEnabled ? 'bg-action-active text-fg-primary shadow-sm' : 'text-fg-tertiary hover:text-fg-secondary'
+                      endFrameEnabled && !startFrameEnabled ? 'bg-action-active text-fg-primary shadow-sm' : 'text-fg-tertiary hover:text-fg-secondary'
                     }`}
                   >
                     End frame
@@ -226,7 +284,7 @@ export function GapGenerationModal({
                 {displayedBeforeFrame ? (
                   <div
                     className="relative w-[38%] h-full flex-shrink-0 overflow-hidden rounded-l-xl group/before cursor-pointer"
-                    onClick={() => { if (startFrameEnabled) { setStartFrameEnabled(false) } else { setStartFrameEnabled(true); setEndFrameEnabled(false) } }}
+                    onClick={() => toggleFrame('start')}
                   >
                     <img
                       src={pathToFileUrl(displayedBeforeFrame)}
@@ -292,7 +350,7 @@ export function GapGenerationModal({
                 {displayedAfterFrame ? (
                   <div
                     className="relative w-[38%] h-full flex-shrink-0 overflow-hidden rounded-r-xl group/after cursor-pointer"
-                    onClick={() => { if (endFrameEnabled) { setEndFrameEnabled(false) } else { setEndFrameEnabled(true); setStartFrameEnabled(false) } }}
+                    onClick={() => toggleFrame('end')}
                   >
                     <img
                       src={pathToFileUrl(displayedAfterFrame)}

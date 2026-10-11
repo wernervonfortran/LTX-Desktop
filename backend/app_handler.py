@@ -56,6 +56,7 @@ from services.interfaces import (
     VideoProcessor,
 )
 from services.analytics import AnalyticsService, QueuedEnhancement
+from services.openrouter_client.openrouter_client import OpenRouterClient
 from services.lora_catalog import LoraCatalogProvider
 from services.store import Store
 from services.records import GenerationRecord, UnavailableError
@@ -106,6 +107,7 @@ class AppHandler:
         text_encoder: TextEncoder,
         task_runner: TaskRunner,
         ltx_api_client: LTXAPIClient,
+        openrouter_client: OpenRouterClient,
         zit_api_client: ZitAPIClient,
         fast_video_pipeline_class: type[FastVideoPipeline],
         image_generation_pipeline_class: type[ImageGenerationPipeline],
@@ -128,6 +130,7 @@ class AppHandler:
         self.video_processor = video_processor
         self.task_runner = task_runner
         self.ltx_api_client = ltx_api_client
+        self.openrouter_client = openrouter_client
         self.zit_api_client = zit_api_client
         self.fast_video_pipeline_class = fast_video_pipeline_class
         self.image_generation_pipeline_class = image_generation_pipeline_class
@@ -242,6 +245,7 @@ class AppHandler:
             text_handler=self.text,
             prompt_enhancement_handler=self.prompt_enhancement,
             ltx_api_client=ltx_api_client,
+            openrouter_client=openrouter_client,
             config=config,
         )
 
@@ -450,6 +454,7 @@ class ServiceBundle:
     text_encoder: TextEncoder
     task_runner: TaskRunner
     ltx_api_client: LTXAPIClient
+    openrouter_client: OpenRouterClient
     zit_api_client: ZitAPIClient
     fast_video_pipeline_class: type[FastVideoPipeline]
     image_generation_pipeline_class: type[ImageGenerationPipeline]
@@ -475,6 +480,7 @@ def build_default_service_bundle(config: RuntimeConfig) -> ServiceBundle:
     from services.ic_lora_pipeline.ltx_ic_lora_pipeline import LTXIcLoraPipeline
     from services.image_generation_pipeline.zit_image_generation_pipeline import ZitImageGenerationPipeline
     from services.ltx_api_client.ltx_api_client_impl import LTXAPIClientImpl
+    from services.openrouter_client.openrouter_client_impl import OpenRouterClientImpl
     from services.model_downloader.hugging_face_downloader import HuggingFaceDownloader
     from services.retake_pipeline.ltx_retake_pipeline import LTXRetakePipeline
     from services.prompt_enhancer_pipeline.ltx_prompt_enhancer_pipeline import LtxPromptEnhancerPipeline
@@ -502,6 +508,7 @@ def build_default_service_bundle(config: RuntimeConfig) -> ServiceBundle:
         ),
         task_runner=ThreadingRunner(),
         ltx_api_client=LTXAPIClientImpl(http=http, ltx_api_base_url=config.ltx_api_base_url),
+        openrouter_client=OpenRouterClientImpl(http=http),
         zit_api_client=ZitAPIClientImpl(http=http),
         fast_video_pipeline_class=LTXFastVideoPipeline,
         image_generation_pipeline_class=ZitImageGenerationPipeline,
@@ -546,6 +553,7 @@ def build_initial_state(
         text_encoder=bundle.text_encoder,
         task_runner=bundle.task_runner,
         ltx_api_client=bundle.ltx_api_client,
+        openrouter_client=bundle.openrouter_client,
         zit_api_client=bundle.zit_api_client,
         fast_video_pipeline_class=bundle.fast_video_pipeline_class,
         image_generation_pipeline_class=bundle.image_generation_pipeline_class,

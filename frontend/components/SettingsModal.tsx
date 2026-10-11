@@ -196,9 +196,11 @@ export function SettingsScreen({
     settings,
     updateSettings,
     saveLtxApiKey,
+    saveOpenRouterApiKey,
     saveFalApiKey,
     saveGeminiApiKey,
     clearLtxApiKey,
+    clearOpenRouterApiKey,
     clearFalApiKey,
     clearGeminiApiKey,
     refreshSettings,
@@ -210,6 +212,7 @@ export function SettingsScreen({
   const tabBodyRef = useRef<HTMLDivElement>(null);
   const geminiSectionRef = useRef<HTMLElement>(null);
   const ltxApiKey = useApiKeyFocus(active, activeTab, setActiveTab);
+  const openRouterApiKey = useApiKeyFocus(active, activeTab, setActiveTab);
   const falApiKey = useApiKeyFocus(active, activeTab, setActiveTab);
   const geminiApiKey = useApiKeyFocus(
     active,
@@ -219,13 +222,15 @@ export function SettingsScreen({
     tabBodyRef,
   );
   const [ltxApiKeyInput, setLtxApiKeyInput] = useState("");
+  const [openRouterApiKeyInput, setOpenRouterApiKeyInput] = useState("");
   const [falApiKeyInput, setFalApiKeyInput] = useState("");
   const [geminiApiKeyInput, setGeminiApiKeyInput] = useState("");
-  type ApiKeyId = "ltx" | "fal" | "gemini";
+  type ApiKeyId = "ltx" | "openrouter" | "fal" | "gemini";
   // Ref so a second click cannot start before React re-renders the disabled buttons.
   const pendingApiKeyRef = useRef<ApiKeyId | null>(null);
   const [pendingApiKey, setPendingApiKey] = useState<ApiKeyId | null>(null);
   const [ltxKeyError, setLtxKeyError] = useState<string | null>(null);
+  const [openRouterKeyError, setOpenRouterKeyError] = useState<string | null>(null);
   const [falKeyError, setFalKeyError] = useState<string | null>(null);
   const [geminiKeyError, setGeminiKeyError] = useState<string | null>(null);
   const showGeminiKeyBanner = initialReason === "geminiKeyRequired";
@@ -594,6 +599,69 @@ export function SettingsScreen({
                     }}
                   >
                     Get API key
+                  </button>
+                }
+              />
+
+              <ApiKeySettingsBlock
+                title="OpenRouter"
+                description="Cloud video and image generation with hosted models (Seedance, Veo, Wan, Kling, …). One key for the whole catalog."
+                statusBadge={
+                  settings.hasOpenRouterApiKey ? <SettingsKeyStatus configured /> : null
+                }
+                input={
+                  <LtxApiKeyInput
+                    ref={openRouterApiKey.inputRef}
+                    value={openRouterApiKeyInput}
+                    onChange={(e) => setOpenRouterApiKeyInput(e.target.value)}
+                    placeholder={
+                      settings.hasOpenRouterApiKey
+                        ? "Enter a new key to replace"
+                        : "Enter your OpenRouter API key"
+                    }
+                    stopPropagation
+                  />
+                }
+                replaceDisabled={!openRouterApiKeyInput.trim()}
+                isSaving={pendingApiKey === "openrouter"}
+                actionsLocked={pendingApiKey !== null}
+                saveError={openRouterKeyError}
+                keyConfigured={settings.hasOpenRouterApiKey}
+                onRemove={() => {
+                  runApiKeyMutation(
+                    "openrouter",
+                    async () => {
+                      await clearOpenRouterApiKey();
+                      setOpenRouterApiKeyInput("");
+                    },
+                    (message) => window.alert(message),
+                    "Could not remove your OpenRouter API key.",
+                  );
+                }}
+                onReplace={() => {
+                  const trimmed = openRouterApiKeyInput.trim();
+                  if (!trimmed) return;
+                  setOpenRouterKeyError(null);
+                  runApiKeyMutation(
+                    "openrouter",
+                    async () => {
+                      await saveOpenRouterApiKey(trimmed);
+                      setOpenRouterApiKeyInput("");
+                    },
+                    setOpenRouterKeyError,
+                    "This key couldn’t be saved.",
+                  );
+                }}
+                getKeyLink={
+                  <button
+                    type="button"
+                    className={contentStyles.apiKeyInlineLink}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      window.electronAPI.openExternalUrl?.({ url: "https://openrouter.ai/settings/keys" });
+                    }}
+                  >
+                    Get OpenRouter key
                   </button>
                 }
               />

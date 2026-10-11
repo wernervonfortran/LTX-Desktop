@@ -1320,6 +1320,42 @@ class FakeTextEncoder:
         return None
 
 
+class FakeOpenRouterClient:
+    """OpenRouter fork: test double for the OpenRouter video/image client."""
+
+    def __init__(self) -> None:
+        self.list_video_models_calls: list[dict[str, Any]] = []
+        self.generate_video_calls: list[dict[str, Any]] = []
+        self.generate_image_calls: list[dict[str, Any]] = []
+        self.raise_on_list_video_models: Exception | None = None
+        self.raise_on_generate_video: Exception | None = None
+        self.raise_on_generate_image: Exception | None = None
+        self.video_models: list[Any] = []
+        self.video_result = b"fake-openrouter-video"
+        self.image_result = b"fake-openrouter-image"
+
+    def list_video_models(self, *, api_key: str) -> list[Any]:
+        self.list_video_models_calls.append({"api_key": api_key})
+        if self.raise_on_list_video_models is not None:
+            raise self.raise_on_list_video_models
+        return list(self.video_models)
+
+    def generate_video(self, **kwargs: Any) -> bytes:
+        self.generate_video_calls.append(kwargs)
+        if self.raise_on_generate_video is not None:
+            raise self.raise_on_generate_video
+        on_progress = kwargs.get("on_progress")
+        if on_progress is not None:
+            on_progress("completed", 100)
+        return self.video_result
+
+    def generate_image(self, **kwargs: Any) -> bytes:
+        self.generate_image_calls.append(kwargs)
+        if self.raise_on_generate_image is not None:
+            raise self.raise_on_generate_image
+        return self.image_result
+
+
 @dataclass
 class FakeServices:
     http: FakeHTTPClient = field(default_factory=FakeHTTPClient)
@@ -1331,6 +1367,7 @@ class FakeServices:
     text_encoder: FakeTextEncoder = field(default_factory=FakeTextEncoder)
     task_runner: FakeTaskRunner = field(default_factory=FakeTaskRunner)
     ltx_api_client: FakeLTXAPIClient = field(default_factory=FakeLTXAPIClient)
+    openrouter_client: FakeOpenRouterClient = field(default_factory=FakeOpenRouterClient)
     zit_api_client: FakeZitAPIClient = field(default_factory=FakeZitAPIClient)
     fast_video_pipeline: FakeFastVideoPipeline = field(default_factory=FakeFastVideoPipeline)
     image_generation_pipeline: FakeImageGenerationPipeline = field(default_factory=FakeImageGenerationPipeline)

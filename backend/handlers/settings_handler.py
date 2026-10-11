@@ -24,7 +24,11 @@ from services.gemini_text_client import (
     normalize_gemini_model_id,
     resolve_gemini_model,
 )
-from services.api_key_validation import validate_fal_api_key, validate_gemini_api_key
+from services.api_key_validation import (
+    validate_fal_api_key,
+    validate_gemini_api_key,
+    validate_openrouter_api_key,
+)
 from services.interfaces import HTTPClient
 from state.app_state_types import AppState
 
@@ -87,10 +91,13 @@ class SettingsHandler(StateHandlerBase):
     def _validate_incoming_api_keys(self, patch: UpdateSettingsRequest) -> None:
         gemini_key = _nonempty_key(patch, "gemini_api_key")
         fal_key = _nonempty_key(patch, "fal_api_key")
+        openrouter_key = _nonempty_key(patch, "openrouter_api_key")
         if gemini_key is not None:
             validate_gemini_api_key(self._http, api_key=gemini_key)
         if fal_key is not None:
             validate_fal_api_key(self._http, api_key=fal_key)
+        if openrouter_key is not None:
+            validate_openrouter_api_key(self._http, api_key=openrouter_key)
 
     @with_state_lock
     def _apply_settings_patch(
@@ -99,7 +106,7 @@ class SettingsHandler(StateHandlerBase):
         raw_patch = patch.model_dump(by_alias=False, exclude_unset=True)
         patch_payload = strip_none_values(ensure_json_object(raw_patch))
 
-        for key_field in ("ltx_api_key", "gemini_api_key", "fal_api_key"):
+        for key_field in ("ltx_api_key", "gemini_api_key", "fal_api_key", "openrouter_api_key"):
             explicitly_set = key_field in patch.model_fields_set
             if not explicitly_set:
                 continue

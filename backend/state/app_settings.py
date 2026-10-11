@@ -92,6 +92,10 @@ class AppSettings(SettingsBaseModel):
     diffusion_stage_cache_enabled: bool = False
     ltx_api_key: str = ""
     user_prefers_ltx_api_video_generations: bool = False
+    # OpenRouter fork: one key for cloud video + image generation. When set and the
+    # preference is on, generations route to OpenRouter instead of local/LTX-API.
+    openrouter_api_key: str = ""
+    user_prefers_openrouter_video_generations: bool = True
     fal_api_key: str = ""
     user_prefers_fal_api_image_generations: bool = False
     use_local_text_encoder: bool = False
@@ -193,6 +197,8 @@ class SettingsResponse(SettingsBaseModel):
     diffusion_stage_cache_enabled: bool = False
     has_ltx_api_key: bool = False
     user_prefers_ltx_api_video_generations: bool = False
+    has_openrouter_api_key: bool = False
+    user_prefers_openrouter_video_generations: bool = True
     has_fal_api_key: bool = False
     user_prefers_fal_api_image_generations: bool = False
     use_local_text_encoder: bool = False
@@ -225,9 +231,11 @@ def resolved_use_conv_vae(settings: AppSettings) -> bool:
 def to_settings_response(settings: AppSettings) -> SettingsResponse:
     data = settings.model_dump(by_alias=False)
     ltx_key = data.pop("ltx_api_key", "")
+    or_key = data.pop("openrouter_api_key", "")
     fal_key = data.pop("fal_api_key", "")
     gemini_key = data.pop("gemini_api_key", "")
     data["has_ltx_api_key"] = bool(ltx_key)
+    data["has_openrouter_api_key"] = bool(or_key)
     data["has_fal_api_key"] = bool(fal_key)
     data["has_gemini_api_key"] = bool(gemini_key)
     data["use_conv_vae"] = resolved_use_conv_vae(settings)

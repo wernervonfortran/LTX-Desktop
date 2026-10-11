@@ -1426,6 +1426,8 @@ export interface components {
             ltxApiKey?: string | null;
             /** Modelsdir */
             modelsDir?: string | null;
+            /** Openrouterapikey */
+            openrouterApiKey?: string | null;
             /** Promptcachesize */
             promptCacheSize?: number | null;
             /** Promptenhancerenabled */
@@ -1446,6 +1448,8 @@ export interface components {
             userPrefersFalApiImageGenerations?: boolean | null;
             /** Userprefersltxapivideogenerations */
             userPrefersLtxApiVideoGenerations?: boolean | null;
+            /** Userprefersopenroutervideogenerations */
+            userPrefersOpenrouterVideoGenerations?: boolean | null;
         };
         /** Asset */
         Asset: {
@@ -1612,7 +1616,7 @@ export interface components {
              * @default 16:9
              * @enum {string}
              */
-            aspectRatio: "auto" | "21:9" | "16:9" | "3:2" | "4:3" | "1:1" | "4:5" | "9:16";
+            aspectRatio: "auto" | "21:9" | "16:9" | "3:2" | "4:3" | "1:1" | "4:5" | "9:16" | "3:4" | "9:21";
             /**
              * Cameramotion
              * @default none
@@ -1625,11 +1629,8 @@ export interface components {
              * @enum {integer}
              */
             fps: 24 | 25 | 48 | 50;
-            /**
-             * Model
-             * @enum {string}
-             */
-            model: "ltx-2.3-fast" | "ltx-2.5-fast";
+            /** Model */
+            model: string;
             /**
              * Negativeprompt
              * @default
@@ -1895,16 +1896,10 @@ export interface components {
          * @description One downloaded offering. `local_models` stays active-pipeline-shaped.
          */
         DownloadedLocalVideoGenerationModelSpecItem: {
-            /**
-             * Model
-             * @enum {string}
-             */
-            model: "ltx-2.3-fast" | "ltx-2.5-fast";
-            /**
-             * Pipeline
-             * @enum {string}
-             */
-            pipeline: "fast" | "pro" | "fast-2.5" | "pro-2.5";
+            /** Model */
+            model: string;
+            /** Pipeline */
+            pipeline: string;
             spec: components["schemas"]["LTXVideoGenerationSpec"];
         };
         /**
@@ -1974,11 +1969,8 @@ export interface components {
              * @enum {string}
              */
             mode: "start" | "end";
-            /**
-             * Model
-             * @enum {string}
-             */
-            model: "ltx-2.3-fast" | "ltx-2.5-fast";
+            /** Model */
+            model: string;
             /**
              * Prompt
              * @default
@@ -2170,7 +2162,7 @@ export interface components {
         /** GenerateVideoModelsSpecsResponse */
         GenerateVideoModelsSpecsResponse: {
             /** Active Offering */
-            active_offering?: ("ltx-2.3-fast" | "ltx-2.5-fast") | null;
+            active_offering?: string | null;
             /** Api Models */
             api_models: components["schemas"]["LTXVideoGenerationModelSpecItem"][];
             /** Downloaded Local Models */
@@ -2190,7 +2182,7 @@ export interface components {
              * @default 16:9
              * @enum {string}
              */
-            aspectRatio: "21:9" | "16:9" | "3:2" | "4:3" | "1:1" | "4:5" | "9:16";
+            aspectRatio: "21:9" | "16:9" | "3:2" | "4:3" | "1:1" | "4:5" | "9:16" | "3:4" | "9:21";
             /**
              * Audio
              * @default false
@@ -2208,7 +2200,7 @@ export interface components {
              * Duration
              * @default 5
              */
-            duration: (2 | 3 | 4 | 5 | 6 | 8 | 10 | 12 | 14 | 16 | 18 | 20) | null;
+            duration: (2 | 3 | 4 | 5 | 6 | 8 | 10 | 12 | 14 | 15 | 16 | 18 | 20 | 24 | 25 | 30) | null;
             /**
              * Fps
              * @default 24
@@ -2226,9 +2218,8 @@ export interface components {
             /**
              * Model
              * @default fast
-             * @enum {string}
              */
-            model: "fast" | "pro" | "fast-2.5" | "pro-2.5";
+            model: string;
             /**
              * Negativeprompt
              * @default
@@ -2247,7 +2238,7 @@ export interface components {
              * @default 1080p
              * @enum {string}
              */
-            resolution: "270p" | "360p" | "540p" | "720p" | "1080p" | "1440p" | "2160p";
+            resolution: "270p" | "360p" | "480p" | "540p" | "720p" | "768p" | "1080p" | "1440p" | "2K" | "2160p" | "4K";
             /** Seed */
             seed?: number | null;
         };
@@ -2709,11 +2700,8 @@ export interface components {
             audioMode?: ("source" | "generated" | "off") | null;
             /** Fps */
             fps?: number | null;
-            /**
-             * Model
-             * @enum {string}
-             */
-            model: "ltx-2.3-fast" | "ltx-2.5-fast";
+            /** Model */
+            model: string;
             /**
              * Prompt
              * @default
@@ -2835,7 +2823,7 @@ export interface components {
              * @default auto
              * @enum {string}
              */
-            aspectRatio: "auto" | "21:9" | "16:9" | "3:2" | "4:3" | "1:1" | "4:5" | "9:16";
+            aspectRatio: "auto" | "21:9" | "16:9" | "3:2" | "4:3" | "1:1" | "4:5" | "9:16" | "3:4" | "9:21";
             /**
              * Cameramotion
              * @default none
@@ -2846,18 +2834,15 @@ export interface components {
              * Duration
              * @default 5
              */
-            duration: (2 | 3 | 4 | 5 | 6 | 8 | 10 | 12 | 14 | 16 | 18 | 20) | null;
+            duration: (2 | 3 | 4 | 5 | 6 | 8 | 10 | 12 | 14 | 15 | 16 | 18 | 20 | 24 | 25 | 30) | null;
             /**
              * Fps
              * @default 24
              * @enum {integer}
              */
             fps: 24 | 25 | 48 | 50;
-            /**
-             * Model
-             * @enum {string}
-             */
-            model: "ltx-2.3-fast" | "ltx-2.5-fast";
+            /** Model */
+            model: string;
             /**
              * Negativeprompt
              * @default
@@ -2876,7 +2861,7 @@ export interface components {
              * @default 1080p
              * @enum {string}
              */
-            resolution: "270p" | "360p" | "540p" | "720p" | "1080p" | "1440p" | "2160p";
+            resolution: "270p" | "360p" | "480p" | "540p" | "720p" | "768p" | "1080p" | "1440p" | "2K" | "2160p" | "4K";
             /** Seed */
             seed?: number | null;
         };
@@ -2980,6 +2965,11 @@ export interface components {
             i2v: boolean;
             /** Ic Lora */
             ic_lora: boolean;
+            /**
+             * Last Frame
+             * @default false
+             */
+            last_frame: boolean;
             /** Multi Keyframe */
             multi_keyframe: boolean;
             /** Multi Keyframe Max Count */
@@ -2993,20 +2983,17 @@ export interface components {
         };
         /** LTXVideoGenerationModelSpecItem */
         LTXVideoGenerationModelSpecItem: {
-            /**
-             * Pipeline
-             * @enum {string}
-             */
-            pipeline: "fast" | "pro" | "fast-2.5" | "pro-2.5";
+            /** Pipeline */
+            pipeline: string;
             spec: components["schemas"]["LTXVideoGenerationSpec"];
         };
         /** LTXVideoGenerationResolutionSpec */
         LTXVideoGenerationResolutionSpec: {
             /** Aspect Ratios */
-            aspect_ratios: ("21:9" | "16:9" | "3:2" | "4:3" | "1:1" | "4:5" | "9:16")[];
+            aspect_ratios: ("21:9" | "16:9" | "3:2" | "4:3" | "1:1" | "4:5" | "9:16" | "3:4" | "9:21")[];
             /** Fps To Durations */
             fps_to_durations: {
-                [key: string]: (2 | 3 | 4 | 5 | 6 | 8 | 10 | 12 | 14 | 16 | 18 | 20)[];
+                [key: string]: (2 | 3 | 4 | 5 | 6 | 8 | 10 | 12 | 14 | 15 | 16 | 18 | 20 | 24 | 25 | 30)[];
             };
         };
         /** LTXVideoGenerationSpec */
@@ -3187,7 +3174,7 @@ export interface components {
              * @default 16:9
              * @enum {string}
              */
-            aspectRatio: "auto" | "21:9" | "16:9" | "3:2" | "4:3" | "1:1" | "4:5" | "9:16";
+            aspectRatio: "auto" | "21:9" | "16:9" | "3:2" | "4:3" | "1:1" | "4:5" | "9:16" | "3:4" | "9:21";
             /**
              * Cameramotion
              * @default none
@@ -3200,18 +3187,15 @@ export interface components {
              * Duration
              * @default 5
              */
-            duration: (2 | 3 | 4 | 5 | 6 | 8 | 10 | 12 | 14 | 16 | 18 | 20) | null;
+            duration: (2 | 3 | 4 | 5 | 6 | 8 | 10 | 12 | 14 | 15 | 16 | 18 | 20 | 24 | 25 | 30) | null;
             /**
              * Fps
              * @default 24
              * @enum {integer}
              */
             fps: 24 | 25 | 48 | 50;
-            /**
-             * Model
-             * @enum {string}
-             */
-            model: "ltx-2.3-fast" | "ltx-2.5-fast";
+            /** Model */
+            model: string;
             /**
              * Negativeprompt
              * @default
@@ -3230,7 +3214,7 @@ export interface components {
              * @default 1080p
              * @enum {string}
              */
-            resolution: "270p" | "360p" | "540p" | "720p" | "1080p" | "1440p" | "2160p";
+            resolution: "270p" | "360p" | "480p" | "540p" | "720p" | "768p" | "1080p" | "1440p" | "2K" | "2160p" | "4K";
             /**
              * Scale
              * @default 1
@@ -3646,11 +3630,8 @@ export interface components {
              * @enum {string}
              */
             mode: "replace_audio_and_video" | "replace_video" | "replace_audio";
-            /**
-             * Model
-             * @enum {string}
-             */
-            model: "ltx-2.3-fast" | "ltx-2.5-fast";
+            /** Model */
+            model: string;
             /**
              * Prompt
              * @default
@@ -3729,6 +3710,11 @@ export interface components {
              */
             hasLtxApiKey: boolean;
             /**
+             * Hasopenrouterapikey
+             * @default false
+             */
+            hasOpenrouterApiKey: boolean;
+            /**
              * Lockedseed
              * @default 42
              */
@@ -3786,6 +3772,11 @@ export interface components {
              * @default false
              */
             userPrefersLtxApiVideoGenerations: boolean;
+            /**
+             * Userprefersopenroutervideogenerations
+             * @default true
+             */
+            userPrefersOpenrouterVideoGenerations: boolean;
         };
         /** StatusResponse */
         StatusResponse: {
@@ -3882,7 +3873,7 @@ export interface components {
              * @default 16:9
              * @enum {string}
              */
-            aspectRatio: "21:9" | "16:9" | "3:2" | "4:3" | "1:1" | "4:5" | "9:16";
+            aspectRatio: "21:9" | "16:9" | "3:2" | "4:3" | "1:1" | "4:5" | "9:16" | "3:4" | "9:21";
             /**
              * Cameramotion
              * @default none
@@ -3893,7 +3884,7 @@ export interface components {
              * Duration
              * @default 5
              */
-            duration: (2 | 3 | 4 | 5 | 6 | 8 | 10 | 12 | 14 | 16 | 18 | 20) | null;
+            duration: (2 | 3 | 4 | 5 | 6 | 8 | 10 | 12 | 14 | 15 | 16 | 18 | 20 | 24 | 25 | 30) | null;
             /**
              * Fps
              * @default 24
@@ -3902,11 +3893,8 @@ export interface components {
             fps: 24 | 25 | 48 | 50;
             /** Loras */
             loras?: components["schemas"]["LoraEntry"][];
-            /**
-             * Model
-             * @enum {string}
-             */
-            model: "ltx-2.3-fast" | "ltx-2.5-fast";
+            /** Model */
+            model: string;
             /**
              * Negativeprompt
              * @default
@@ -3925,7 +3913,7 @@ export interface components {
              * @default 1080p
              * @enum {string}
              */
-            resolution: "270p" | "360p" | "540p" | "720p" | "1080p" | "1440p" | "2160p";
+            resolution: "270p" | "360p" | "480p" | "540p" | "720p" | "768p" | "1080p" | "1440p" | "2K" | "2160p" | "4K";
             /** Seed */
             seed?: number | null;
         };

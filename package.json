@@ -105,5 +105,8 @@
       "shell-quote": "^1.9.0",
       "tar": "^7.5.11"
     }
+  },
+  "allowScripts": {
+    "esbuild@0.28.2": true
   }
 }

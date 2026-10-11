@@ -49,7 +49,9 @@ LTXLocalModelId = Literal[
 ]
 # T2V/I2V/A2V/LoRA create-body `params.model`. Not a GenSpace pipeline (`fast`)
 # and not a checkpoint id. Future API rows (`ltx-2.5-pro`, …) join this union.
-OfferingId = Literal["ltx-2.3-fast", "ltx-2.5-fast"]
+# OpenRouter fork: widened to str so "or:<openrouter-model-id>" rows validate; the
+# built-in ids stay in OFFERING_IDS and are checked explicitly where required.
+OfferingId = str
 
 
 class ImageConditioningInput(NamedTuple):
@@ -439,15 +441,19 @@ class LtxInsufficientFundsErrorResponse(BaseModel):
 
 
 LTXVideoGenResolution: TypeAlias = Literal[
-    "270p", "360p", "540p", "720p", "1080p", "1440p", "2160p"
+    "270p", "360p", "480p", "540p", "720p", "768p", "1080p", "1440p", "2K", "2160p", "4K"
 ]
 LTXLocalA2VResolution: TypeAlias = Literal["270p", "360p", "540p", "720p", "1080p"]
-LTXVideoGenDuration: TypeAlias = Literal[2, 3, 4, 5, 6, 8, 10, 12, 14, 16, 18, 20]
+LTXVideoGenDuration: TypeAlias = Literal[2, 3, 4, 5, 6, 8, 10, 12, 14, 15, 16, 18, 20, 24, 25, 30]
 LTXVideoGenFps: TypeAlias = Literal[24, 25, 48, 50]
-LTXVideoGenPipeline: TypeAlias = Literal["fast", "pro", "fast-2.5", "pro-2.5"]
+# Known built-in pipelines plus the OpenRouter fork convention: an OpenRouter model
+# is addressed as "or:<openrouter-model-id>" (e.g. "or:bytedance/seedance-2.0-mini").
+# Kept as `str` so catalog-driven ids pass validation; handlers route on the "or:" prefix.
+LTXVideoGenPipeline: TypeAlias = str
+OPENROUTER_PIPELINE_PREFIX: str = "or:"
 # Widest to tallest. A cell advertises a subset of this; 2:3 is intentionally absent.
-LTXVideoGenAspectRatio: TypeAlias = Literal["21:9", "16:9", "3:2", "4:3", "1:1", "4:5", "9:16"]
-LTXQueuedAspectRatio: TypeAlias = Literal["auto", "21:9", "16:9", "3:2", "4:3", "1:1", "4:5", "9:16"]
+LTXVideoGenAspectRatio: TypeAlias = Literal["21:9", "16:9", "3:2", "4:3", "1:1", "4:5", "9:16", "3:4", "9:21"]
+LTXQueuedAspectRatio: TypeAlias = Literal["auto", "21:9", "16:9", "3:2", "4:3", "1:1", "4:5", "9:16", "3:4", "9:21"]
 
 
 class LTXVideoGenerationResolutionSpec(BaseModel):
@@ -469,6 +475,8 @@ class LTXOfferingCapabilitiesSpec(BaseModel):
     user_loras: bool
     camera_motion: bool
     auto_duration: bool
+    # OpenRouter fork: model accepts an explicit last-frame conditioning image.
+    last_frame: bool = False
 
 
 class LTXVideoGenerationSpec(BaseModel):

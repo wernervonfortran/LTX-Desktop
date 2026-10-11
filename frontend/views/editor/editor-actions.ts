@@ -106,6 +106,8 @@ export interface InsertGeneratedGapAssetParams {
   gap: TimelineGapSelection
   asset: Asset
   createAudio: boolean
+  // OpenRouter fork: gap fill generated from an end-frame start condition plays reversed.
+  reversed?: boolean
 }
 
 export interface SourceEditParams {
@@ -1579,7 +1581,7 @@ export function insertGeneratedGapAsset(state: EditorState, params: InsertGenera
     trimStart: 0,
     trimEnd: 0,
     speed: 1,
-    reversed: false,
+    reversed: params.reversed === true,
     muted: false,
     volume: 1,
     trackIndex: params.gap.trackIndex,

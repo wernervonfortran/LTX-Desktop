@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+import base64
 
 from collections.abc import Callable
 import tempfile
@@ -27,6 +28,7 @@ from api_types import (
     AudioToVideoParams,
     CreateAudioToVideoParams,
     OfferingId,
+    DownloadedLocalVideoGenerationModelSpecItem,
     GenerateVideoCancelledResponse,
     GenerateVideoCompleteResponse,
     GenerateVideoModelsSpecsResponse,
@@ -85,12 +87,18 @@ from server_utils.media_validation import (
     validate_audio_file,
     validate_image_file,
 )
-from server_utils.oriented_image import open_oriented_rgb, oriented_image_file
+from server_utils.oriented_image import open_oriented_rgb, oriented_image_file, oriented_image_payload
 from services.denoising_progress import distilled_total_steps
 from services.generation_interrupt import GenerationCancelledError, is_cancel_exception
 from services.interfaces import LTXAPIClient
 from services.ltx_api_client.ltx_api_client import LTXAPIClientError
 from services.ltx_api_client.ltx_api_errors import map_ltx_api_client_error, missing_ltx_api_key_error
+from services.openrouter_client.openrouter_client import OpenRouterClient, OpenRouterClientError
+from runtime_config.openrouter_specs import (
+    OpenRouterCatalogCache,
+    is_openrouter_pipeline,
+    or_model_id_from_pipeline,
+)
 from state.app_state_types import AppState
 from state.app_settings import should_video_generate_with_ltx_api
 
@@ -127,6 +135,7 @@ class VideoGenerationHandler(StateHandlerBase):
         text_handler: TextHandler,
         prompt_enhancement_handler: PromptEnhancementHandler,
         ltx_api_client: LTXAPIClient,
+        openrouter_client: OpenRouterClient,
         config: RuntimeConfig,
     ) -> None:
         super().__init__(state, lock, config)
@@ -135,6 +144,8 @@ class VideoGenerationHandler(StateHandlerBase):
         self._text = text_handler
         self._prompt_enhancement = prompt_enhancement_handler
         self._ltx_api_client = ltx_api_client
+        self._openrouter = openrouter_client
+        self._openrouter_cache = OpenRouterCatalogCache()
 
     def _active_ltx_model_id(self) -> LTXLocalModelId | None:
         return resolve_active_ltx_model_id(
@@ -179,7 +190,7 @@ class VideoGenerationHandler(StateHandlerBase):
 
     def get_model_specs(self) -> GenerateVideoModelsSpecsResponse:
         memory_gb, process_mode, darwin = self._local_job_filter()
-        return build_generate_video_model_specs_response(
+        response = build_generate_video_model_specs_response(
             local_model_id=self._active_ltx_model_id(),
             models_dir=self.models_dir,
             duration_head_ready=self._duration_head_ready(),
@@ -188,6 +199,31 @@ class VideoGenerationHandler(StateHandlerBase):
             darwin=darwin,
             low_performance_machine=detect_low_performance_machine(self.config),
         )
+        # OpenRouter fork: when a key is configured, merge the live OpenRouter catalog
+        # into api_models so every model picker (GenSpace, Timeline gap, retake menus)
+        # offers them without further frontend changes.
+        or_key = self.state.app_settings.openrouter_api_key.strip()
+        if or_key:
+            or_specs, _ = self._openrouter_cache.get(self._openrouter, or_key)
+            if or_specs:
+                response.api_models = or_specs + response.api_models
+                # Home/GenSpace pickers list `downloaded_local_models`; register the
+                # OpenRouter rows there too so the create flow can select them.
+                response.downloaded_local_models = [
+                    DownloadedLocalVideoGenerationModelSpecItem(
+                        model=item.pipeline,
+                        pipeline=item.pipeline,
+                        spec=item.spec,
+                    )
+                    for item in or_specs
+                ] + response.downloaded_local_models
+                # The fork's default mode is OpenRouter-only: hide local rows when the
+                # user prefers OpenRouter and a key is present, so pickers show the
+                # cloud catalog first (and Home/Remote create can't pick a local model
+                # that would need checkpoints).
+                if self.state.app_settings.user_prefers_openrouter_video_generations:
+                    response.local_models = or_specs + response.local_models
+        return response
 
     def derive_local_a2v_params(
         self, params: CreateAudioToVideoParams, audio_duration_ms: int
@@ -352,6 +388,10 @@ class VideoGenerationHandler(StateHandlerBase):
         return num_frames
 
     def generate(self, req: GenerateVideoRequest) -> GenerateVideoResponse:
+        # OpenRouter fork: an "or:<model>" pipeline id routes to OpenRouter regardless
+        # of local/API settings. Checked first so a hosted model works on any machine.
+        if is_openrouter_pipeline(req.model):
+            return self._generate_openrouter(req)
         self._require_local_generation_possible(api_key=self.state.app_settings.ltx_api_key)
         use_api_specs = should_video_generate_with_ltx_api(
             force_api_generations=self.config.force_api_generations,
@@ -376,9 +416,15 @@ class VideoGenerationHandler(StateHandlerBase):
         prompt_wrap: Callable[[str], str] | None = None,
         a2v_num_frames: int | None = None,
         a2v_audio_duration_seconds: float | None = None,
-        local_model_id: LTXLocalModelId,
+        local_model_id: LTXLocalModelId | None,
         explore_generation: bool = True,
     ) -> GenerateVideoResponse:
+        # OpenRouter fork: queued Home/Remote rows carry "or:<model>" model ids; route
+        # them to the OpenRouter path instead of requiring a local checkpoint.
+        if is_openrouter_pipeline(req.model):
+            return self._generate_openrouter(
+                req, output_path=output_path, generation_id=generation_id
+            )
         # Local-only Home/Remote entry: checkpoint is required. GenSpace
         # ``generate()`` still uses Settings via ``_generate_local_reserved_validated``.
         self._require_local_generation_possible()
@@ -1202,3 +1248,164 @@ class VideoGenerationHandler(StateHandlerBase):
         output_path = self._make_output_path()
         output_path.write_bytes(video_bytes)
         return output_path
+
+    # ---- OpenRouter fork ----
+
+    def _openrouter_image_data_url(self, path: Path) -> str:
+        payload, mime = oriented_image_payload(path)
+        return f"data:{mime};base64,{base64.b64encode(payload).decode('ascii')}"
+
+    def _validate_openrouter_request(self, req: GenerateVideoRequest) -> str:
+        """Return the OpenRouter model id, or raise. Validates against the live catalog."""
+        or_model_id = or_model_id_from_pipeline(req.model)
+        if or_model_id is None:  # pragma: no cover - routed by caller
+            raise HTTPError(422, "Not an OpenRouter model", code="INVALID_VIDEO_GENERATION_SPEC")
+        api_key = self.state.app_settings.openrouter_api_key.strip()
+        if not api_key:
+            raise HTTPError(
+                422,
+                "OpenRouter API key is not configured. Add it under Settings -> API Keys.",
+                code="OPENROUTER_API_KEY_MISSING",
+            )
+        image_path = normalize_optional_path(req.imagePath)
+        last_image_path = normalize_optional_path(req.lastImagePath)
+        if normalize_optional_path(req.audioPath):
+            raise HTTPError(
+                422, "Audio-to-video is not supported by OpenRouter models.",
+                code="INVALID_VIDEO_GENERATION_SPEC",
+            )
+        if req.keyframes:
+            raise HTTPError(
+                422, "Multi-keyframe generation is not supported by OpenRouter models.",
+                code="INVALID_VIDEO_GENERATION_SPEC",
+            )
+        if last_image_path and not image_path:
+            raise HTTPError(
+                422, "Last frame requires a first-frame image",
+                code="INVALID_VIDEO_GENERATION_SPEC",
+            )
+        specs, _raw = self._openrouter_cache.get(self._openrouter, api_key)
+        catalog_model = self._openrouter_cache.find(or_model_id)
+        if catalog_model is None:
+            raise HTTPError(
+                422,
+                f"Unknown OpenRouter model '{or_model_id}'. Refresh the model list and retry.",
+                code="INVALID_VIDEO_GENERATION_SPEC",
+            )
+        if req.duration is None:
+            raise HTTPError(
+                422, "OpenRouter models require an explicit duration.",
+                code="INVALID_VIDEO_GENERATION_SPEC",
+            )
+        if req.duration not in catalog_model.supported_durations:
+            raise HTTPError(
+                422,
+                f"Duration {req.duration}s not supported by '{catalog_model.display_name}' "
+                f"(supported: {', '.join(str(d) for d in catalog_model.supported_durations)})",
+                code="INVALID_VIDEO_GENERATION_SPEC",
+            )
+        if req.resolution not in catalog_model.supported_resolutions:
+            raise HTTPError(
+                422,
+                f"Resolution {req.resolution} not supported by '{catalog_model.display_name}' "
+                f"(supported: {', '.join(catalog_model.supported_resolutions)})",
+                code="INVALID_VIDEO_GENERATION_SPEC",
+            )
+        if image_path and "first_frame" not in catalog_model.supported_frame_images:
+            raise HTTPError(
+                422,
+                f"'{catalog_model.display_name}' does not support image-to-video.",
+                code="INVALID_VIDEO_GENERATION_SPEC",
+            )
+        if last_image_path and "last_frame" not in catalog_model.supported_frame_images:
+            raise HTTPError(
+                422,
+                f"'{catalog_model.display_name}' does not support a last-frame image.",
+                code="INVALID_VIDEO_GENERATION_SPEC",
+            )
+        return or_model_id
+
+    def _generate_openrouter(
+        self,
+        req: GenerateVideoRequest,
+        *,
+        output_path: Path | None = None,
+        generation_id: str | None = None,
+    ) -> GenerateVideoResponse:
+        or_model_id = self._validate_openrouter_request(req)
+        api_key = self.state.app_settings.openrouter_api_key.strip()
+
+        image_path = normalize_optional_path(req.imagePath)
+        last_image_path = normalize_optional_path(req.lastImagePath)
+
+        # GenSpace's generate() must reserve; the queue runner already claimed the job
+        # and passes generation_id + output_path (mirrors the local pipeline split).
+        from contextlib import nullcontext
+        reservation = (
+            self._generation.reserved_generation_start()
+            if generation_id is None
+            else nullcontext()
+        )
+        with reservation:
+            gen_id = generation_id or self._make_generation_id()
+            self._generation.start_api_generation(gen_id)
+            try:
+                self._generation.update_progress("validating_request", 5, None, None)
+
+                first_data_url: str | None = None
+                last_data_url: str | None = None
+                if image_path is not None:
+                    self._generation.update_progress("uploading_image", 20, None, None)
+                    first_data_url = self._openrouter_image_data_url(validate_image_file(image_path))
+                if last_image_path is not None:
+                    self._generation.update_progress("uploading_image", 35, None, None)
+                    last_data_url = self._openrouter_image_data_url(
+                        validate_image_file(last_image_path)
+                    )
+
+                self._generation.raise_if_cancelled()
+                self._generation.update_progress("inference", 55, None, None)
+
+                video_bytes = self._openrouter.generate_video(
+                    api_key=api_key,
+                    model=or_model_id,
+                    prompt=req.prompt,
+                    duration=int(req.duration) if req.duration is not None else None,
+                    resolution=req.resolution,
+                    aspect_ratio=req.aspectRatio,
+                    generate_audio=bool(req.audio),
+                    first_frame_data_url=first_data_url,
+                    last_frame_data_url=last_data_url,
+                    seed=req.seed,
+                    on_progress=lambda phase, pct: self._generation.update_progress(phase, pct, None, None),
+                    raise_if_cancelled=self._generation.raise_if_cancelled,
+                )
+
+                self._generation.raise_if_cancelled()
+                self._generation.update_progress("downloading_output", 85, None, None)
+
+                if output_path is not None:
+                    output_path.parent.mkdir(parents=True, exist_ok=True)
+                    output_path.write_bytes(video_bytes)
+                    written = output_path
+                else:
+                    written = self._write_forced_api_video(video_bytes)
+                if self._generation.is_generation_cancelled():
+                    written.unlink(missing_ok=True)
+                    raise GenerationCancelledError()
+
+                self._generation.update_progress("complete", 100, None, None)
+                self._generation.complete_generation(str(written))
+                return GenerateVideoCompleteResponse(status="complete", video_path=str(written))
+            except HTTPError as e:
+                self._generation.fail_generation(e.detail)
+                raise
+            except OpenRouterClientError as e:
+                self._generation.fail_generation(e.detail)
+                raise HTTPError(e.status_code, e.detail, code="OPENROUTER_GENERATION_FAILED") from e
+            except Exception as e:
+                self._generation.fail_generation(str(e))
+                if is_cancel_exception(e):
+                    logger.info("OpenRouter generation cancelled by user")
+                    return GenerateVideoCancelledResponse(status="cancelled")
+                raise HTTPError(500, str(e)) from e

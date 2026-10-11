@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, cast
 
 from pydantic import BaseModel
 
@@ -18,6 +18,7 @@ from api_types import (
 )
 from _routes._errors import HTTPError
 from runtime_config.offerings import OFFERING_IDS, local_pipeline_for_offering
+from runtime_config.openrouter_specs import is_openrouter_pipeline
 from services.features.video.job_common import (
     model_from_spec,
     resolve_job_local_model_id,
@@ -54,7 +55,7 @@ class ReservedVideoGenerator(Protocol):
         prompt_wrap: Callable[[str], str] | None = None,
         a2v_num_frames: int | None = None,
         a2v_audio_duration_seconds: float | None = None,
-        local_model_id: LTXLocalModelId,
+        local_model_id: LTXLocalModelId | None,
     ) -> GenerateVideoResponse: ...
 
 
@@ -154,6 +155,10 @@ def offering_payload_from_params(
 ) -> tuple[dict[str, object], OfferingId]:
     payload = params.model_dump(mode="python")
     raw_model = payload["model"]
+    # OpenRouter fork: "or:<model>" ids are valid offerings and pass through unchanged
+    # (the video handler routes them to the OpenRouter path).
+    if isinstance(raw_model, str) and is_openrouter_pipeline(raw_model):
+        return payload, cast(OfferingId, raw_model)
     if not isinstance(raw_model, str) or raw_model not in OFFERING_IDS:
         raise HTTPError(422, "INVALID_VIDEO_GENERATION_SPEC")
     payload["model"] = local_pipeline_for_offering(raw_model)
@@ -162,9 +167,12 @@ def offering_payload_from_params(
 
 def generate_request_from_offering_params(
     params: BaseModel, video_generation: ReservedVideoGenerator
-) -> tuple[GenerateVideoRequest, LTXLocalModelId]:
+) -> tuple[GenerateVideoRequest, LTXLocalModelId | None]:
     payload, offering = offering_payload_from_params(params)
-    return (
-        GenerateVideoRequest.model_validate(payload),
-        resolve_job_local_model_id(video_generation.models_dir, offering),
+    # OpenRouter fork: "or:" offerings need no local checkpoint.
+    local_model_id = (
+        None
+        if is_openrouter_pipeline(offering)
+        else resolve_job_local_model_id(video_generation.models_dir, offering)
     )
+    return (GenerateVideoRequest.model_validate(payload), local_model_id)

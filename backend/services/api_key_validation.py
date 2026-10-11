@@ -64,3 +64,24 @@ def validate_fal_api_key(http: HTTPClient, *, api_key: str) -> None:
     if response.status_code in _AUTH_REJECTED:
         raise HTTPError(400, _INVALID_KEY_MESSAGE, code="FAL_INVALID_API_KEY")
     _raise_unverified(code="FAL_API_KEY_UNVERIFIED")
+
+
+# OpenRouter fork: GET /api/v1/key returns the key's own metadata — 401 for junk keys.
+OPENROUTER_KEY_PROBE_URL = "https://openrouter.ai/api/v1/key"
+
+
+def validate_openrouter_api_key(http: HTTPClient, *, api_key: str) -> None:
+    """GET /api/v1/key — 401/403 means the key was rejected. 200 means it was accepted."""
+    try:
+        response = http.get(
+            OPENROUTER_KEY_PROBE_URL,
+            headers={"Authorization": f"Bearer {api_key}"},
+            timeout=15,
+        )
+    except HttpTransportError as exc:
+        _raise_transport("OpenRouter", exc)
+    if response.status_code == 200:
+        return
+    if response.status_code in _AUTH_REJECTED:
+        raise HTTPError(400, _INVALID_KEY_MESSAGE, code="OPENROUTER_INVALID_API_KEY")
+    _raise_unverified(code="OPENROUTER_API_KEY_UNVERIFIED")

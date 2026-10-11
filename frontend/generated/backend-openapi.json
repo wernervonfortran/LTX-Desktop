@@ -273,6 +273,17 @@
             ],
             "title": "Modelsdir"
           },
+          "openrouterApiKey": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openrouterapikey"
+          },
           "promptCacheSize": {
             "anyOf": [
               {
@@ -390,6 +401,17 @@
               }
             ],
             "title": "Userprefersltxapivideogenerations"
+          },
+          "userPrefersOpenrouterVideoGenerations": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Userprefersopenroutervideogenerations"
           }
         },
         "title": "AppSettingsPatch",
@@ -892,7 +914,9 @@
               "4:3",
               "1:1",
               "4:5",
-              "9:16"
+              "9:16",
+              "3:4",
+              "9:21"
             ],
             "title": "Aspectratio",
             "type": "string"
@@ -925,10 +949,6 @@
             "type": "integer"
           },
           "model": {
-            "enum": [
-              "ltx-2.3-fast",
-              "ltx-2.5-fast"
-            ],
             "title": "Model",
             "type": "string"
           },
@@ -1732,20 +1752,10 @@
         "description": "One downloaded offering. `local_models` stays active-pipeline-shaped.",
         "properties": {
           "model": {
-            "enum": [
-              "ltx-2.3-fast",
-              "ltx-2.5-fast"
-            ],
             "title": "Model",
             "type": "string"
           },
           "pipeline": {
-            "enum": [
-              "fast",
-              "pro",
-              "fast-2.5",
-              "pro-2.5"
-            ],
             "title": "Pipeline",
             "type": "string"
           },
@@ -1947,10 +1957,6 @@
             "type": "string"
           },
           "model": {
-            "enum": [
-              "ltx-2.3-fast",
-              "ltx-2.5-fast"
-            ],
             "title": "Model",
             "type": "string"
           },
@@ -2345,10 +2351,6 @@
           "active_offering": {
             "anyOf": [
               {
-                "enum": [
-                  "ltx-2.3-fast",
-                  "ltx-2.5-fast"
-                ],
                 "type": "string"
               },
               {
@@ -2402,7 +2404,9 @@
               "4:3",
               "1:1",
               "4:5",
-              "9:16"
+              "9:16",
+              "3:4",
+              "9:21"
             ],
             "title": "Aspectratio",
             "type": "string"
@@ -2452,9 +2456,13 @@
                   10,
                   12,
                   14,
+                  15,
                   16,
                   18,
-                  20
+                  20,
+                  24,
+                  25,
+                  30
                 ],
                 "type": "integer"
               },
@@ -2514,12 +2522,6 @@
           },
           "model": {
             "default": "fast",
-            "enum": [
-              "fast",
-              "pro",
-              "fast-2.5",
-              "pro-2.5"
-            ],
             "title": "Model",
             "type": "string"
           },
@@ -2546,11 +2548,15 @@
             "enum": [
               "270p",
               "360p",
+              "480p",
               "540p",
               "720p",
+              "768p",
               "1080p",
               "1440p",
-              "2160p"
+              "2K",
+              "2160p",
+              "4K"
             ],
             "title": "Resolution",
             "type": "string"
@@ -3902,10 +3908,6 @@
             "title": "Fps"
           },
           "model": {
-            "enum": [
-              "ltx-2.3-fast",
-              "ltx-2.5-fast"
-            ],
             "title": "Model",
             "type": "string"
           },
@@ -4187,7 +4189,9 @@
               "4:3",
               "1:1",
               "4:5",
-              "9:16"
+              "9:16",
+              "3:4",
+              "9:21"
             ],
             "title": "Aspectratio",
             "type": "string"
@@ -4221,9 +4225,13 @@
                   10,
                   12,
                   14,
+                  15,
                   16,
                   18,
-                  20
+                  20,
+                  24,
+                  25,
+                  30
                 ],
                 "type": "integer"
               },
@@ -4246,10 +4254,6 @@
             "type": "integer"
           },
           "model": {
-            "enum": [
-              "ltx-2.3-fast",
-              "ltx-2.5-fast"
-            ],
             "title": "Model",
             "type": "string"
           },
@@ -4276,11 +4280,15 @@
             "enum": [
               "270p",
               "360p",
+              "480p",
               "540p",
               "720p",
+              "768p",
               "1080p",
               "1440p",
-              "2160p"
+              "2K",
+              "2160p",
+              "4K"
             ],
             "title": "Resolution",
             "type": "string"
@@ -4541,6 +4549,11 @@
             "title": "Ic Lora",
             "type": "boolean"
           },
+          "last_frame": {
+            "default": false,
+            "title": "Last Frame",
+            "type": "boolean"
+          },
           "multi_keyframe": {
             "title": "Multi Keyframe",
             "type": "boolean"
@@ -4581,12 +4594,6 @@
       "LTXVideoGenerationModelSpecItem": {
         "properties": {
           "pipeline": {
-            "enum": [
-              "fast",
-              "pro",
-              "fast-2.5",
-              "pro-2.5"
-            ],
             "title": "Pipeline",
             "type": "string"
           },
@@ -4612,7 +4619,9 @@
                 "4:3",
                 "1:1",
                 "4:5",
-                "9:16"
+                "9:16",
+                "3:4",
+                "9:21"
               ],
               "type": "string"
             },
@@ -4632,9 +4641,13 @@
                   10,
                   12,
                   14,
+                  15,
                   16,
                   18,
-                  20
+                  20,
+                  24,
+                  25,
+                  30
                 ],
                 "type": "integer"
               },
@@ -4663,11 +4676,15 @@
                   "enum": [
                     "270p",
                     "360p",
+                    "480p",
                     "540p",
                     "720p",
+                    "768p",
                     "1080p",
                     "1440p",
-                    "2160p"
+                    "2K",
+                    "2160p",
+                    "4K"
                   ]
                 },
                 "type": "object"
@@ -4700,11 +4717,15 @@
               "enum": [
                 "270p",
                 "360p",
+                "480p",
                 "540p",
                 "720p",
+                "768p",
                 "1080p",
                 "1440p",
-                "2160p"
+                "2K",
+                "2160p",
+                "4K"
               ]
             },
             "title": "Supported Resolutions Durations",
@@ -5192,7 +5213,9 @@
               "4:3",
               "1:1",
               "4:5",
-              "9:16"
+              "9:16",
+              "3:4",
+              "9:21"
             ],
             "title": "Aspectratio",
             "type": "string"
@@ -5232,9 +5255,13 @@
                   10,
                   12,
                   14,
+                  15,
                   16,
                   18,
-                  20
+                  20,
+                  24,
+                  25,
+                  30
                 ],
                 "type": "integer"
               },
@@ -5257,10 +5284,6 @@
             "type": "integer"
           },
           "model": {
-            "enum": [
-              "ltx-2.3-fast",
-              "ltx-2.5-fast"
-            ],
             "title": "Model",
             "type": "string"
           },
@@ -5288,11 +5311,15 @@
             "enum": [
               "270p",
               "360p",
+              "480p",
               "540p",
               "720p",
+              "768p",
               "1080p",
               "1440p",
-              "2160p"
+              "2K",
+              "2160p",
+              "4K"
             ],
             "title": "Resolution",
             "type": "string"
@@ -6571,10 +6598,6 @@
             "type": "string"
           },
           "model": {
-            "enum": [
-              "ltx-2.3-fast",
-              "ltx-2.5-fast"
-            ],
             "title": "Model",
             "type": "string"
           },
@@ -6733,6 +6756,11 @@
             "title": "Hasltxapikey",
             "type": "boolean"
           },
+          "hasOpenrouterApiKey": {
+            "default": false,
+            "title": "Hasopenrouterapikey",
+            "type": "boolean"
+          },
           "lockedSeed": {
             "default": 42,
             "title": "Lockedseed",
@@ -6805,6 +6833,11 @@
           "userPrefersLtxApiVideoGenerations": {
             "default": false,
             "title": "Userprefersltxapivideogenerations",
+            "type": "boolean"
+          },
+          "userPrefersOpenrouterVideoGenerations": {
+            "default": true,
+            "title": "Userprefersopenroutervideogenerations",
             "type": "boolean"
           }
         },
@@ -7118,7 +7151,9 @@
               "4:3",
               "1:1",
               "4:5",
-              "9:16"
+              "9:16",
+              "3:4",
+              "9:21"
             ],
             "title": "Aspectratio",
             "type": "string"
@@ -7152,9 +7187,13 @@
                   10,
                   12,
                   14,
+                  15,
                   16,
                   18,
-                  20
+                  20,
+                  24,
+                  25,
+                  30
                 ],
                 "type": "integer"
               },
@@ -7184,10 +7223,6 @@
             "type": "array"
           },
           "model": {
-            "enum": [
-              "ltx-2.3-fast",
-              "ltx-2.5-fast"
-            ],
             "title": "Model",
             "type": "string"
           },
@@ -7215,11 +7250,15 @@
             "enum": [
               "270p",
               "360p",
+              "480p",
               "540p",
               "720p",
+              "768p",
               "1080p",
               "1440p",
-              "2160p"
+              "2K",
+              "2160p",
+              "4K"
             ],
             "title": "Resolution",
             "type": "string"

@@ -96,7 +96,15 @@ type GapAnchor = { x: number; gapTop: number; gapBottom: number } | null
 type GapGenerateMode = 'text-to-video' | 'image-to-video' | 'text-to-image'
 
 interface GapGenerationApi {
-  generate: (prompt: string, imagePath: string | null, settings: GenerationSettings) => Promise<void>
+  // OpenRouter fork: widened to match useGeneration().generate so gap fills can
+  // pass lastImagePath (first+last-frame conditioning).
+  generate: (
+    prompt: string,
+    imagePath: string | null,
+    settings: GenerationSettings,
+    audioPath?: string | null,
+    lastImagePath?: string | null,
+  ) => Promise<void>
   generateImage: (prompt: string, settings: GenerationSettings) => Promise<void>
   videoPath: string | null
   imagePath: string | null
@@ -462,6 +470,9 @@ export function VideoEditorTimelineEditingPanel(props: VideoEditorTimelineEditin
   const [gapSuggestionNoApiKey, setGapSuggestionNoApiKey] = useState(false)
   const [gapBeforeFrame, setGapBeforeFrame] = useState<string | null>(null)
   const [gapAfterFrame, setGapAfterFrame] = useState<string | null>(null)
+  // OpenRouter fork: conditioning frames chosen in the gap modal (paths or data: URLs).
+  const [gapFrameSelection, setGapFrameSelection] = useState<{ start: string | null; end: string | null }>({ start: null, end: null })
+  const [gapFrameReversed, setGapFrameReversed] = useState(false)
   const gapDuration = selectedGap ? selectedGap.endTime - selectedGap.startTime : null
   const gapVideoModelSpecs = getVideoGenerationModelSpecs(videoGenerationModelSpecsResponse, {
     useApiSpecs: shouldVideoGenerateWithLtxApi,
@@ -900,8 +911,38 @@ export function VideoEditorTimelineEditingPanel(props: VideoEditorTimelineEditin
       if (mode === 'text-to-image') {
         await gapGenerationApi.generateImage(finalPrompt, settings)
       } else {
+        // OpenRouter fork: pass the chosen conditioning frames into generation as
+        // imagePath/lastImagePath. Pre-fork this only used a manually uploaded
+        // gapImageFile and dropped the extracted boundary frames, so gap fills ran
+        // as text-to-video from the LLM's description (the gap bug).
+        const saveDataUrlToTemp = async (dataUrl: string): Promise<string> => {
+          const b64 = dataUrl.slice(dataUrl.indexOf(',') + 1)
+          const modelsPath = await window.electronAPI.getModelsPath()
+          const tmpDir = modelsPath.replace(/[/\\]models$/, '')
+          const tmpPath = `${tmpDir}/tmp_gap_frame_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.png`
+          await window.electronAPI.saveFile({ filePath: tmpPath, data: b64, encoding: 'base64' })
+          return tmpPath
+        }
+
+        const selectedModelSpec = gapVideoModelSpecs.find((item) => item.pipeline === settings.model)
+        const modelSupportsLastFrame = Boolean(selectedModelSpec?.spec.capabilities?.last_frame)
+
+        let startFrame = gapFrameSelection.start
+        let endFrame = gapFrameSelection.end
+        let reversed = false
+
+        // End-frame-only on a model without last-frame support: condition on it as a
+        // start frame and play the result back in reverse (documented in the modal).
+        if (startFrame === null && endFrame !== null && !modelSupportsLastFrame) {
+          startFrame = endFrame
+          endFrame = null
+          reversed = true
+        }
+
         let imagePath: string | null = null
-        if (gapImageFile) {
+        if (startFrame) {
+          imagePath = startFrame.startsWith('data:') ? await saveDataUrlToTemp(startFrame) : startFrame
+        } else if (gapImageFile) {
           const electronPath = (gapImageFile as { path?: string }).path
           if (electronPath) {
             imagePath = electronPath
@@ -915,7 +956,12 @@ export function VideoEditorTimelineEditingPanel(props: VideoEditorTimelineEditin
             imagePath = tmpPath
           }
         }
-        await gapGenerationApi.generate(finalPrompt, imagePath, settings)
+        let lastImagePath: string | null = null
+        if (endFrame && imagePath) {
+          lastImagePath = endFrame.startsWith('data:') ? await saveDataUrlToTemp(endFrame) : endFrame
+        }
+        setGapFrameReversed(reversed)
+        await gapGenerationApi.generate(finalPrompt, imagePath, settings, undefined, lastImagePath)
       }
     } catch (err) {
       console.error('Gap generation failed:', err)
@@ -928,6 +974,7 @@ export function VideoEditorTimelineEditingPanel(props: VideoEditorTimelineEditin
     gapGenerateMode,
     gapGenerationApi,
     gapImageFile,
+    gapFrameSelection,
     gapPrompt,
     gapSettings,
     gapVideoModelSpecs,
@@ -994,6 +1041,7 @@ export function VideoEditorTimelineEditingPanel(props: VideoEditorTimelineEditin
           gap,
           asset,
           createAudio: assetType === 'video' && generatingGap.applyAudio && generatingGap.settings.audio,
+          reversed: gapFrameReversed,
         })
       }
 
@@ -3317,6 +3365,7 @@ export function VideoEditorTimelineEditingPanel(props: VideoEditorTimelineEditin
           gapCanGenerateVideo={gapCanGenerateVideo}
           gapImageFile={gapImageFile}
           setGapImageFile={setGapImageFile}
+          setGapFrameSelection={setGapFrameSelection}
           gapImageInputRef={gapImageInputRef}
           isRegenerating={gapGenerationApi.isGenerating}
           regenStatusMessage={gapGenerationApi.statusMessage}
