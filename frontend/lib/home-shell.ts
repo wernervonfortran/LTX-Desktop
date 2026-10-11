@@ -202,8 +202,15 @@ export function isProjectEditorPath(pathname: string): boolean {
 }
 
 /** True when DesktopHomeLayout should show the unsupported notice. */
-export function homeLayoutOutletBlocked(pathname: string, localViable: boolean): boolean {
+export function homeLayoutOutletBlocked(
+  pathname: string,
+  localViable: boolean,
+  forceApiGenerations = false,
+): boolean {
   if (localViable) return false;
+  // OpenRouter fork: an API-only machine (no local GPU) is still fully usable
+  // when generations route to hosted models — don't wall off the whole app.
+  if (forceApiGenerations) return false;
   const entry = matchHomeShellEntry(pathname);
   if (entry === undefined) return true;
   return entry.outlet === "localViable";
@@ -234,13 +241,15 @@ export type ShellPageHeaderSlot = "shell" | "page";
 export function homeLayoutChrome(
   pathname: string,
   localViable: boolean,
+  forceApiGenerations = false,
 ): HomeLayoutChrome {
   const isLegacyProjectEditor = isProjectEditorPath(pathname);
   return {
     showHeader: !isLegacyProjectEditor,
     featureForm: (isHomeFeaturePath(pathname) && localViable) || isLegacyProjectEditor,
     outletBlocked:
-      !isLegacyProjectEditor && homeLayoutOutletBlocked(pathname, localViable),
+      !isLegacyProjectEditor &&
+      homeLayoutOutletBlocked(pathname, localViable, forceApiGenerations),
   };
 }
 

@@ -138,6 +138,7 @@ class TestOpenRouterGenerate:
             r,
             status_code=422,
             code="OPENROUTER_API_KEY_MISSING",
+            message="OpenRouter API key is not configured. Add it under Settings -> API Keys.",
         )
         assert test_state.openrouter_client.generate_video_calls == []
 
@@ -148,16 +149,20 @@ class TestOpenRouterGenerate:
             r,
             status_code=422,
             code="INVALID_VIDEO_GENERATION_SPEC",
+            message="Unknown OpenRouter model 'test/ghost'. Refresh the model list and retry.",
         )
         assert test_state.openrouter_client.generate_video_calls == []
 
     def test_unsupported_duration_rejected(self, client, test_state):
         _use_openrouter(test_state)
-        r = client.post("/api/generate", json=_or_request(duration=11))
+        # 10 is valid in the global duration Literal but absent from the fake
+        # catalog's supported_durations (4, 5, 8) — so the catalog gate must fire.
+        r = client.post("/api/generate", json=_or_request(duration=10))
         assert_http_error(
             r,
             status_code=422,
             code="INVALID_VIDEO_GENERATION_SPEC",
+            message="Duration 10s not supported by 'Mini Test' (supported: 4, 5, 8)",
         )
 
     def test_last_frame_without_first_rejected(self, client, test_state):
@@ -170,6 +175,7 @@ class TestOpenRouterGenerate:
             r,
             status_code=422,
             code="INVALID_VIDEO_GENERATION_SPEC",
+            message="Last frame requires a first-frame image",
         )
 
     def test_first_last_frames_passed_as_data_urls(self, client, test_state, tmp_path):
@@ -203,6 +209,7 @@ class TestOpenRouterGenerate:
             r,
             status_code=422,
             code="INVALID_VIDEO_GENERATION_SPEC",
+            message="'No Frames' does not support image-to-video.",
         )
 
     def test_client_error_maps_to_http_error(self, client, test_state):
@@ -225,6 +232,7 @@ class TestOpenRouterGenerate:
             r,
             status_code=422,
             code="INVALID_VIDEO_GENERATION_SPEC",
+            message="Unknown OpenRouter model 'test/mini'. Refresh the model list and retry.",
         )
 
 

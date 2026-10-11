@@ -42,10 +42,10 @@ function DesktopHomeLayoutBody({
   rootElement: HTMLElement | null | undefined;
 }) {
   const { open: openQuickSearch } = useQuickSearch();
-  const { localViable, modelsVersion, updateSettings, settings } = useAppSettings();
+  const { localViable, modelsVersion, updateSettings, settings, forceApiGenerations } = useAppSettings();
   const { pathname } = useLocation();
   useHistoryShortcuts();
-  const chrome = homeLayoutChrome(pathname, localViable);
+  const chrome = homeLayoutChrome(pathname, localViable, forceApiGenerations);
   const headerSlot = shellPageHeaderSlot(pathname, localViable);
   const shellEntry = matchHomeShellEntry(pathname);
   const isSettingsPage = shellEntry?.id === "settings";

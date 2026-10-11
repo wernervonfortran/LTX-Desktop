@@ -386,7 +386,10 @@ export async function startPythonBackend(): Promise<void> {
         LTX_ANALYTICS_TOKEN: sink?.token ?? '',
         // Explore UI is gated on local_viable; designers on low-RAM Macs still need
         // to iterate in pnpm dev without closing every other app first.
-        ...(isDev ? { LTX_DEV_FORCE_LOCAL_VIABLE: '1' } : {}),
+        // OpenRouter fork: allow opting out (LTX_DEV_FORCE_LOCAL_VIABLE=0) so CPU-only
+        // dev machines take the force_api_generations path (OpenRouter/API mode)
+        // instead of the local-model setup gate.
+        ...(isDev ? { LTX_DEV_FORCE_LOCAL_VIABLE: process.env.LTX_DEV_FORCE_LOCAL_VIABLE ?? '1' } : {}),
         // Bundled prebuilt mps-sdpa zero-copy extension cache (macOS). Lives inside
         // python-embed (→ resources/python) so it rides the CI python-embed cache. The
         // backend direct-imports the .so from here (mps_prebuilt_ext.py), no copy step;
