@@ -1630,7 +1630,7 @@ export interface components {
              */
             fps: 24 | 25 | 48 | 50;
             /** Model */
-            model: string;
+            model: ("ltx-2.3-fast" | "ltx-2.5-fast") | string;
             /**
              * Negativeprompt
              * @default
@@ -1897,7 +1897,7 @@ export interface components {
          */
         DownloadedLocalVideoGenerationModelSpecItem: {
             /** Model */
-            model: string;
+            model: ("ltx-2.3-fast" | "ltx-2.5-fast") | string;
             /** Pipeline */
             pipeline: string;
             spec: components["schemas"]["LTXVideoGenerationSpec"];
@@ -1970,7 +1970,7 @@ export interface components {
              */
             mode: "start" | "end";
             /** Model */
-            model: string;
+            model: ("ltx-2.3-fast" | "ltx-2.5-fast") | string;
             /**
              * Prompt
              * @default
@@ -2162,7 +2162,7 @@ export interface components {
         /** GenerateVideoModelsSpecsResponse */
         GenerateVideoModelsSpecsResponse: {
             /** Active Offering */
-            active_offering?: string | null;
+            active_offering?: ("ltx-2.3-fast" | "ltx-2.5-fast") | string | null;
             /** Api Models */
             api_models: components["schemas"]["LTXVideoGenerationModelSpecItem"][];
             /** Downloaded Local Models */
@@ -2701,7 +2701,7 @@ export interface components {
             /** Fps */
             fps?: number | null;
             /** Model */
-            model: string;
+            model: ("ltx-2.3-fast" | "ltx-2.5-fast") | string;
             /**
              * Prompt
              * @default
@@ -2842,7 +2842,7 @@ export interface components {
              */
             fps: 24 | 25 | 48 | 50;
             /** Model */
-            model: string;
+            model: ("ltx-2.3-fast" | "ltx-2.5-fast") | string;
             /**
              * Negativeprompt
              * @default
@@ -3195,7 +3195,7 @@ export interface components {
              */
             fps: 24 | 25 | 48 | 50;
             /** Model */
-            model: string;
+            model: ("ltx-2.3-fast" | "ltx-2.5-fast") | string;
             /**
              * Negativeprompt
              * @default
@@ -3631,7 +3631,7 @@ export interface components {
              */
             mode: "replace_audio_and_video" | "replace_video" | "replace_audio";
             /** Model */
-            model: string;
+            model: ("ltx-2.3-fast" | "ltx-2.5-fast") | string;
             /**
              * Prompt
              * @default
@@ -3894,7 +3894,7 @@ export interface components {
             /** Loras */
             loras?: components["schemas"]["LoraEntry"][];
             /** Model */
-            model: string;
+            model: ("ltx-2.3-fast" | "ltx-2.5-fast") | string;
             /**
              * Negativeprompt
              * @default

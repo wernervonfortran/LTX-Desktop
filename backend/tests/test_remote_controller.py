@@ -175,6 +175,7 @@ def _independent_handler(test_state, tmp_path: Path, *, prompt_cache_size: int):
             text_encoder=fake_services.text_encoder,
             task_runner=fake_services.task_runner,
             ltx_api_client=fake_services.ltx_api_client,
+            openrouter_client=fake_services.openrouter_client,
             zit_api_client=fake_services.zit_api_client,
             fast_video_pipeline_class=type(fake_services.fast_video_pipeline),
             image_generation_pipeline_class=type(fake_services.image_generation_pipeline),

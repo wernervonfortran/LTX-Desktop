@@ -949,8 +949,20 @@
             "type": "integer"
           },
           "model": {
-            "title": "Model",
-            "type": "string"
+            "anyOf": [
+              {
+                "enum": [
+                  "ltx-2.3-fast",
+                  "ltx-2.5-fast"
+                ],
+                "type": "string"
+              },
+              {
+                "pattern": "^or:[A-Za-z0-9._/-]+$",
+                "type": "string"
+              }
+            ],
+            "title": "Model"
           },
           "negativePrompt": {
             "default": "",
@@ -1752,8 +1764,20 @@
         "description": "One downloaded offering. `local_models` stays active-pipeline-shaped.",
         "properties": {
           "model": {
-            "title": "Model",
-            "type": "string"
+            "anyOf": [
+              {
+                "enum": [
+                  "ltx-2.3-fast",
+                  "ltx-2.5-fast"
+                ],
+                "type": "string"
+              },
+              {
+                "pattern": "^or:[A-Za-z0-9._/-]+$",
+                "type": "string"
+              }
+            ],
+            "title": "Model"
           },
           "pipeline": {
             "title": "Pipeline",
@@ -1957,8 +1981,20 @@
             "type": "string"
           },
           "model": {
-            "title": "Model",
-            "type": "string"
+            "anyOf": [
+              {
+                "enum": [
+                  "ltx-2.3-fast",
+                  "ltx-2.5-fast"
+                ],
+                "type": "string"
+              },
+              {
+                "pattern": "^or:[A-Za-z0-9._/-]+$",
+                "type": "string"
+              }
+            ],
+            "title": "Model"
           },
           "prompt": {
             "default": "",
@@ -2351,6 +2387,14 @@
           "active_offering": {
             "anyOf": [
               {
+                "enum": [
+                  "ltx-2.3-fast",
+                  "ltx-2.5-fast"
+                ],
+                "type": "string"
+              },
+              {
+                "pattern": "^or:[A-Za-z0-9._/-]+$",
                 "type": "string"
               },
               {
@@ -3908,8 +3952,20 @@
             "title": "Fps"
           },
           "model": {
-            "title": "Model",
-            "type": "string"
+            "anyOf": [
+              {
+                "enum": [
+                  "ltx-2.3-fast",
+                  "ltx-2.5-fast"
+                ],
+                "type": "string"
+              },
+              {
+                "pattern": "^or:[A-Za-z0-9._/-]+$",
+                "type": "string"
+              }
+            ],
+            "title": "Model"
           },
           "prompt": {
             "default": "",
@@ -4254,8 +4310,20 @@
             "type": "integer"
           },
           "model": {
-            "title": "Model",
-            "type": "string"
+            "anyOf": [
+              {
+                "enum": [
+                  "ltx-2.3-fast",
+                  "ltx-2.5-fast"
+                ],
+                "type": "string"
+              },
+              {
+                "pattern": "^or:[A-Za-z0-9._/-]+$",
+                "type": "string"
+              }
+            ],
+            "title": "Model"
           },
           "negativePrompt": {
             "default": "",
@@ -5284,8 +5352,20 @@
             "type": "integer"
           },
           "model": {
-            "title": "Model",
-            "type": "string"
+            "anyOf": [
+              {
+                "enum": [
+                  "ltx-2.3-fast",
+                  "ltx-2.5-fast"
+                ],
+                "type": "string"
+              },
+              {
+                "pattern": "^or:[A-Za-z0-9._/-]+$",
+                "type": "string"
+              }
+            ],
+            "title": "Model"
           },
           "negativePrompt": {
             "default": "",
@@ -6598,8 +6678,20 @@
             "type": "string"
           },
           "model": {
-            "title": "Model",
-            "type": "string"
+            "anyOf": [
+              {
+                "enum": [
+                  "ltx-2.3-fast",
+                  "ltx-2.5-fast"
+                ],
+                "type": "string"
+              },
+              {
+                "pattern": "^or:[A-Za-z0-9._/-]+$",
+                "type": "string"
+              }
+            ],
+            "title": "Model"
           },
           "prompt": {
             "default": "",
@@ -7223,8 +7315,20 @@
             "type": "array"
           },
           "model": {
-            "title": "Model",
-            "type": "string"
+            "anyOf": [
+              {
+                "enum": [
+                  "ltx-2.3-fast",
+                  "ltx-2.5-fast"
+                ],
+                "type": "string"
+              },
+              {
+                "pattern": "^or:[A-Za-z0-9._/-]+$",
+                "type": "string"
+              }
+            ],
+            "title": "Model"
           },
           "negativePrompt": {
             "default": "",

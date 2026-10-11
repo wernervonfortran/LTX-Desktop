@@ -49,9 +49,12 @@ LTXLocalModelId = Literal[
 ]
 # T2V/I2V/A2V/LoRA create-body `params.model`. Not a GenSpace pipeline (`fast`)
 # and not a checkpoint id. Future API rows (`ltx-2.5-pro`, …) join this union.
-# OpenRouter fork: widened to str so "or:<openrouter-model-id>" rows validate; the
-# built-in ids stay in OFFERING_IDS and are checked explicitly where required.
-OfferingId = str
+# OpenRouter fork: built-in ids stay a strict Literal (pipeline ids like "fast"
+# must keep failing validation); OpenRouter rows are addressed as
+# "or:<openrouter-model-id>" and pass only through the anchored pattern.
+OfferingId = Literal["ltx-2.3-fast", "ltx-2.5-fast"] | Annotated[
+    str, StringConstraints(pattern=r"^or:[A-Za-z0-9._/-]+$")
+]
 
 
 class ImageConditioningInput(NamedTuple):
