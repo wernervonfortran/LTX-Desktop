@@ -32,6 +32,11 @@ class OpenRouterVideoModel:
     supported_frame_images: tuple[str, ...]
     min_price_per_second: float | None
     supports_audio: bool
+    # True when the model accepts first_frame AND last_frame in one job.
+    # The catalog's supported_frame_images only lists individually accepted
+    # slots; MiniMax H3/H3 Max list both but reject the pair at submit time
+    # ("single keyframe image") — confirmed by live probe 2026-10-13.
+    supports_frame_combo: bool = False
 
 
 @dataclass(frozen=True, slots=True)

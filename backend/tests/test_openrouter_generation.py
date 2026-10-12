@@ -26,6 +26,20 @@ _MINI = OpenRouterVideoModel(
     supported_frame_images=("first_frame", "last_frame"),
     min_price_per_second=0.03,
     supports_audio=True,
+    supports_frame_combo=True,
+)
+
+# Lists both frame slots but rejects the pair (MiniMax H3 behaviour).
+_SINGLE_KEY = OpenRouterVideoModel(
+    id="test/single-key",
+    display_name="Single Key",
+    supported_resolutions=("720p",),
+    supported_durations=(5,),
+    supported_aspect_ratios=("16:9",),
+    supported_frame_images=("first_frame", "last_frame"),
+    min_price_per_second=0.05,
+    supports_audio=False,
+    supports_frame_combo=False,
 )
 
 _NO_FRAMES = OpenRouterVideoModel(
@@ -39,6 +53,21 @@ _NO_FRAMES = OpenRouterVideoModel(
     supports_audio=False,
 )
 
+def test_min_price_per_second_unit_handling():
+    from services.openrouter_client.openrouter_client_impl import _min_price_per_second
+
+    # USD per second via duration SKUs
+    assert _min_price_per_second({"duration_seconds": "0.08", "duration_seconds_480p": "0.05"}) == 0.05
+    # cents per second must not be read as dollars
+    assert _min_price_per_second({"cents_per_second_output": "17", "cents_per_second_output_1080p": "29"}) == 0.17
+    # token-only SKUs are not a per-second rate: no price, not a wrong one
+    assert _min_price_per_second({"video_tokens": "0.0000035"}) is None
+    # mixed: only the per-second SKUs count
+    assert _min_price_per_second({"video_tokens": "0.0000035", "duration_seconds": "0.1"}) == 0.1
+    assert _min_price_per_second(None) is None
+    assert _min_price_per_second({}) is None
+
+
 _MP4_BYTES = b"\x00\x00\x00\x1cftypisom" + b"\x00" * 500
 
 
@@ -46,7 +75,7 @@ def _use_openrouter(test_state, *, key: str = "or-key") -> None:
     test_state.state.app_settings.openrouter_api_key = key
     test_state.state.app_settings.user_prefers_openrouter_video_generations = True
     fake = test_state.openrouter_client
-    fake.video_models = [_MINI, _NO_FRAMES]
+    fake.video_models = [_MINI, _NO_FRAMES, _SINGLE_KEY]
     fake.video_result = _MP4_BYTES
 
 
@@ -210,6 +239,29 @@ class TestOpenRouterGenerate:
             status_code=422,
             code="INVALID_VIDEO_GENERATION_SPEC",
             message="'No Frames' does not support image-to-video.",
+        )
+
+    def test_single_keyframe_model_rejects_both_frames(self, client, test_state, tmp_path):
+        from PIL import Image
+
+        _use_openrouter(test_state)
+        first = tmp_path / "first.png"
+        last = tmp_path / "last.png"
+        Image.new("RGB", (64, 36), "red").save(first)
+        Image.new("RGB", (64, 36), "blue").save(last)
+        r = client.post(
+            "/api/generate",
+            json=_or_request(model="or:test/single-key", imagePath=str(first), lastImagePath=str(last)),
+        )
+        assert_http_error(
+            r,
+            status_code=422,
+            code="INVALID_VIDEO_GENERATION_SPEC",
+            message=(
+                "'Single Key' accepts only ONE keyframe per job (start OR end frame, "
+                "not both). Remove one image, or pick a model that supports start+end: "
+                "Mini Test."
+            ),
         )
 
     def test_client_error_maps_to_http_error(self, client, test_state):

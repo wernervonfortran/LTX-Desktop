@@ -1284,7 +1284,7 @@ class VideoGenerationHandler(StateHandlerBase):
                 422, "Last frame requires a first-frame image",
                 code="INVALID_VIDEO_GENERATION_SPEC",
             )
-        specs, _raw = self._openrouter_cache.get(self._openrouter, api_key)
+        specs, raw_models = self._openrouter_cache.get(self._openrouter, api_key)
         catalog_model = self._openrouter_cache.find(or_model_id)
         if catalog_model is None:
             raise HTTPError(
@@ -1321,6 +1321,20 @@ class VideoGenerationHandler(StateHandlerBase):
             raise HTTPError(
                 422,
                 f"'{catalog_model.display_name}' does not support a last-frame image.",
+                code="INVALID_VIDEO_GENERATION_SPEC",
+            )
+        if image_path and last_image_path and not catalog_model.supports_frame_combo:
+            combo_models = [
+                m.display_name
+                for m in raw_models
+                if m.supports_frame_combo
+            ]
+            hint = ", ".join(combo_models[:6]) if combo_models else "Veo 3.1, Kling v3, Seedance 2.x, Wan 2.7"
+            raise HTTPError(
+                422,
+                f"'{catalog_model.display_name}' accepts only ONE keyframe per job "
+                "(start OR end frame, not both). Remove one image, or pick a model "
+                f"that supports start+end: {hint}.",
                 code="INVALID_VIDEO_GENERATION_SPEC",
             )
         return or_model_id

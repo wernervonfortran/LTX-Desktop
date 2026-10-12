@@ -88,8 +88,22 @@ def spec_from_openrouter_model(model: OpenRouterVideoModel) -> LTXVideoGeneratio
     has_last = "last_frame" in model.supported_frame_images
     price_hint = model.min_price_per_second
     display = model.display_name
-    if price_hint is not None:
-        display = f"{display} (~${price_hint:,.4f}/s)"
+    # Frame capability so the picker shows what each model takes before
+    # the user hits generate ("Start+End" vs "Start or End" vs "Start").
+    if has_first and has_last:
+        frames = "Start+End" if model.supports_frame_combo else "Start or End"
+    elif has_first:
+        frames = "Start"
+    else:
+        frames = ""
+    bits = [
+        b for b in (
+            frames,
+            f"~${price_hint:,.4f}/s" if price_hint is not None else "",
+        ) if b
+    ]
+    if bits:
+        display = f"{display} ({' · '.join(bits)})"
     return LTXVideoGenerationModelSpecItem(
         pipeline=openrouter_pipeline_id(model.id),
         spec=LTXVideoGenerationSpec(

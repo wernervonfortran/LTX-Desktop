@@ -97,19 +97,31 @@ def _as_int_tuple(value: object) -> tuple[int, ...]:
 
 
 def _min_price_per_second(skus: object) -> float | None:
-    """OpenRouter reports per-model pricing_skus; units differ per provider (per second
-    or per video token). We surface the smallest positive number as a *relative*
-    cheapness hint only — the UI labels it 'price index', never a currency promise."""
+    """Cheapest per-second price in USD from a model's pricing_skus.
+
+    SKU units vary per provider and the raw numbers are NOT comparable:
+    '*duration_seconds*' / '*per_second*' keys are USD/second,
+    'cents_per_second*' keys are cents/second, and 'video_tokens*' keys are
+    USD/token (not convertible to a per-second rate without resolution/fps —
+    those models show no price rather than a wrong one).
+    """
     if not isinstance(skus, dict):
         return None
     vals: list[float] = []
-    for v in skus.values():
+    for key, value in skus.items():
+        if not isinstance(key, str):
+            continue
         try:
-            f = float(v)  # type: ignore[arg-type]
+            f = float(value)  # type: ignore[arg-type]
         except (TypeError, ValueError):
             continue
-        if f > 0:
+        if f <= 0:
+            continue
+        if key.startswith("cents_per_second"):
+            vals.append(f / 100.0)
+        elif "per_second" in key or "duration_seconds" in key:
             vals.append(f)
+        # video_tokens and other non-time units: skipped on purpose
     return min(vals) if vals else None
 
 
@@ -135,6 +147,17 @@ class OpenRouterClientImpl:
             mid = item.get("id")
             if not isinstance(mid, str):
                 continue
+            frame_images = _as_str_tuple(item.get("supported_frame_images"))
+            # The catalog lists frame slots a model accepts INDIVIDUALLY.
+            # Whether it accepts first+last TOGETHER is not exposed; live
+            # probes (2026-10-13) show the whole MiniMax H3 family rejects
+            # the pair ("single keyframe image") while Veo/Kling/Seedance/
+            # Wan/FLUX accept it. Treat MiniMax as single-keyframe-only.
+            combo = (
+                "first_frame" in frame_images
+                and "last_frame" in frame_images
+                and not mid.startswith("minimax/")
+            )
             models.append(
                 OpenRouterVideoModel(
                     id=mid,
@@ -142,9 +165,10 @@ class OpenRouterClientImpl:
                     supported_resolutions=_as_str_tuple(item.get("supported_resolutions")),
                     supported_durations=_as_int_tuple(item.get("supported_durations")),
                     supported_aspect_ratios=_as_str_tuple(item.get("supported_aspect_ratios")),
-                    supported_frame_images=_as_str_tuple(item.get("supported_frame_images")),
+                    supported_frame_images=frame_images,
                     min_price_per_second=_min_price_per_second(item.get("pricing_skus")),
                     supports_audio=bool(item.get("supports_audio", False)),
+                    supports_frame_combo=combo,
                 )
             )
         return models
