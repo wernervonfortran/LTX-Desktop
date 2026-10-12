@@ -307,6 +307,14 @@ class OpenRouterClientImpl:
             ratios: tuple[str, ...] = ()
             has_resolution = False
             max_refs = 0
+            # Some models (e.g. meta/muse-image) ship an empty supported_parameters
+            # block but accept reference images anyway — the reliable signal is
+            # architecture.input_modalities containing "image".
+            arch = item.get("architecture")
+            if isinstance(arch, dict):
+                mods = arch.get("input_modalities")
+                if isinstance(mods, list) and "image" in mods:
+                    max_refs = max(max_refs, 1)
             if isinstance(params, dict):
                 ar = params.get("aspect_ratio")
                 if isinstance(ar, dict) and isinstance(ar.get("values"), list):
