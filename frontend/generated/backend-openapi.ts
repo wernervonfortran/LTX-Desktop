@@ -1438,6 +1438,8 @@ export interface components {
             remoteExposure?: ("off" | "lan") | null;
             /** Seedlocked */
             seedLocked?: boolean | null;
+            /** Skiplocalmodeldownloads */
+            skipLocalModelDownloads?: boolean | null;
             /** Useconvvae */
             useConvVae?: boolean | null;
             /** Uselocaltextencoder */
@@ -3747,6 +3749,11 @@ export interface components {
              * @default false
              */
             seedLocked: boolean;
+            /**
+             * Skiplocalmodeldownloads
+             * @default false
+             */
+            skipLocalModelDownloads: boolean;
             /**
              * Useconvvae
              * @default false

@@ -347,6 +347,17 @@
             ],
             "title": "Seedlocked"
           },
+          "skipLocalModelDownloads": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skiplocalmodeldownloads"
+          },
           "useConvVae": {
             "anyOf": [
               {
@@ -6900,6 +6911,11 @@
           "seedLocked": {
             "default": false,
             "title": "Seedlocked",
+            "type": "boolean"
+          },
+          "skipLocalModelDownloads": {
+            "default": false,
+            "title": "Skiplocalmodeldownloads",
             "type": "boolean"
           },
           "useConvVae": {

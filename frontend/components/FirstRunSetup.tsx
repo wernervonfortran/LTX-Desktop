@@ -80,6 +80,9 @@ export function LaunchGate({ onComplete }: LaunchGateProps) {
   const [selectedLoraKeys, setSelectedLoraKeys] = useState<string[]>([])
   const [downloadTextEncoder, setDownloadTextEncoder] = useState(true)
   const [downloadImageModel, setDownloadImageModel] = useState(true)
+  // OpenRouter fork: the LTX 2.5 pack is opt-out — machines that generate through
+  // OpenRouter/API don't need ~25 GB of local checkpoints.
+  const [downloadModelPack, setDownloadModelPack] = useState(true)
   const [ltxApiKey, setLtxApiKey] = useState('')
   const [hasSavedLtxApiKey, setHasSavedLtxApiKey] = useState(false)
   const [apiKeyError, setApiKeyError] = useState<string | null>(null)
@@ -139,6 +142,9 @@ export function LaunchGate({ onComplete }: LaunchGateProps) {
     }
   }, [currentStep])
   const modelPackItems = useMemo(() => downloadItems.filter(isFirstRunModelPackItem), [downloadItems])
+  const modelPackOnDisk =
+    modelPackItems.length > 0 && modelPackItems.every((item) => item.downloaded)
+  const modelPackSelected = modelPackOnDisk || downloadModelPack
   const imageItem = useMemo(() => downloadItems.find(isFirstRunImageModel) ?? null, [downloadItems])
   const imageOnDisk = Boolean(imageItem?.downloaded)
   const imageSelected = imageOnDisk || downloadImageModel
@@ -173,13 +179,14 @@ export function LaunchGate({ onComplete }: LaunchGateProps) {
   const pendingDownloadItems = useMemo(
     () =>
       [
-        ...modelPackItems,
+        ...(modelPackSelected ? modelPackItems : []),
         ...(encoderSelected && encoderItem ? [encoderItem] : []),
         ...(imageSelected && imageItem ? [imageItem] : []),
         ...recommendedItems.filter((item) => selectedRecommendedCpIds.includes(item.cp_id)),
       ].filter((item) => !item.downloaded),
     [
       modelPackItems,
+      modelPackSelected,
       encoderSelected,
       encoderItem,
       imageSelected,
@@ -209,7 +216,7 @@ export function LaunchGate({ onComplete }: LaunchGateProps) {
   const hfNeedsLicense = !hfUnsigned && !allAuthorized && !checkError
   const hfComplete = !hfUnsigned && allAuthorized
   const hfShowGate = Boolean(checkError) || hfNeedsLicense
-  const { saveLtxApiKey } = useAppSettings()
+  const { saveLtxApiKey, updateSettings } = useAppSettings()
   const downloadProgress = queue.progress
   const downloadError = queue.error
   const runningDownloadProgress = downloadProgress?.status === 'downloading' ? downloadProgress : null
@@ -404,7 +411,31 @@ export function LaunchGate({ onComplete }: LaunchGateProps) {
       const excludedCpIds = [
         ...(!encoderSelected && encoderCpId ? [encoderCpId] : []),
         ...(!imageSelected && imageCpId ? [imageCpId] : []),
+        // OpenRouter fork: skipping the LTX pack removes its blocking cp_ids.
+        ...(!modelPackSelected && nextLtxRecommendation.status === 'download'
+          ? (nextLtxRecommendation.cps_to_download ?? [])
+          : []),
       ]
+
+      // Persist the opt-out so the boot missing-models gate stays open on later
+      // launches. Local state first (the debounced settings sync must not write a
+      // stale value back), then an immediate API write before the queue starts.
+      updateSettings({ skipLocalModelDownloads: !modelPackSelected })
+      try {
+        const persist = await ApiClient.updateSettings({
+          skipLocalModelDownloads: !modelPackSelected,
+        })
+        if (!persist.ok) {
+          throw new Error(persist.error.message)
+        }
+      } catch (e) {
+        queue.fail(
+          e instanceof Error
+            ? `Could not save the model download choice: ${e.message}`
+            : 'Could not save the model download choice.',
+        )
+        return
+      }
 
       const downloadSteps = buildDownloadSteps(
         nextLtxRecommendation,
@@ -516,6 +547,8 @@ export function LaunchGate({ onComplete }: LaunchGateProps) {
 
                 <ModelDownloadsCard
                   modelPackItems={modelPackItems}
+                  modelPackSelected={modelPackSelected}
+                  onToggleModelPack={() => setDownloadModelPack((value) => !value)}
                   encoderItem={encoderItem}
                   encoderSelected={encoderSelected}
                   onToggleEncoder={() => setDownloadTextEncoder((value) => !value)}

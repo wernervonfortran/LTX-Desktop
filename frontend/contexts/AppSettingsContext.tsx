@@ -16,6 +16,8 @@ export interface AppSettings {
   // OpenRouter fork: one key for cloud video/image generation.
   hasOpenRouterApiKey: boolean
   userPrefersOpenRouterVideoGenerations: boolean
+  // OpenRouter fork: explicit opt-out of the local LTX model pack (first-run Setup).
+  skipLocalModelDownloads: boolean
   hasFalApiKey: boolean
   userPrefersFalApiImageGenerations: boolean
   hasGeminiApiKey: boolean
@@ -47,6 +49,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   userPrefersLtxApiVideoGenerations: false,
   hasOpenRouterApiKey: false,
   userPrefersOpenRouterVideoGenerations: true,
+  skipLocalModelDownloads: false,
   hasFalApiKey: false,
   userPrefersFalApiImageGenerations: false,
   hasGeminiApiKey: false,
@@ -111,6 +114,7 @@ function normalizeAppSettings(data: Partial<AppSettings>): AppSettings {
     userPrefersLtxApiVideoGenerations: data.userPrefersLtxApiVideoGenerations ?? DEFAULT_APP_SETTINGS.userPrefersLtxApiVideoGenerations,
     hasOpenRouterApiKey: data.hasOpenRouterApiKey ?? DEFAULT_APP_SETTINGS.hasOpenRouterApiKey,
     userPrefersOpenRouterVideoGenerations: data.userPrefersOpenRouterVideoGenerations ?? DEFAULT_APP_SETTINGS.userPrefersOpenRouterVideoGenerations,
+    skipLocalModelDownloads: data.skipLocalModelDownloads ?? DEFAULT_APP_SETTINGS.skipLocalModelDownloads,
     hasFalApiKey: data.hasFalApiKey ?? DEFAULT_APP_SETTINGS.hasFalApiKey,
     userPrefersFalApiImageGenerations: data.userPrefersFalApiImageGenerations ?? DEFAULT_APP_SETTINGS.userPrefersFalApiImageGenerations,
     hasGeminiApiKey: data.hasGeminiApiKey ?? DEFAULT_APP_SETTINGS.hasGeminiApiKey,

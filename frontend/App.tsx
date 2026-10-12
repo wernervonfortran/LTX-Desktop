@@ -40,7 +40,7 @@ function setDocumentWindowMode(mode: 'install' | 'app'): void {
 
 function AppContent() {
   const { connected, processStatus, isLoading: backendLoading } = useBackend()
-  const { forceApiGenerations, isLoaded, runtimePolicyLoaded, notifyModelsChanged } = useAppSettings()
+  const { forceApiGenerations, isLoaded, runtimePolicyLoaded, notifyModelsChanged, settings } = useAppSettings()
   // Always mounted here (unlike GenSpace, which unmounts on every view/tab switch) so a
   // generation that finishes while its project isn't open still gets persisted.
   useGenerationRecoveryWatcher()
@@ -206,6 +206,11 @@ function AppContent() {
     isForcedFirstRun && isLoaded && !isFinalizingFirstRun && !firstRunFinalizeError
 
   const areRequiredModelsDownloaded = useCallback(async () => {
+    // OpenRouter fork: an explicit first-run opt-out of the local pack keeps the
+    // gate open — this machine generates through OpenRouter/API, not checkpoints.
+    if (settings.skipLocalModelDownloads) {
+      return true
+    }
     const [ltxResult, imgGenResult] = await Promise.all([
       ApiClient.getLtxRecommendation(),
       ApiClient.getImgGenRecommendation(),
@@ -217,7 +222,7 @@ function AppContent() {
       throw new Error(imgGenResult.error.message)
     }
     return isRequiredLtxBundleReady(ltxResult.data, imgGenResult.data)
-  }, [])
+  }, [settings.skipLocalModelDownloads])
 
   const handleMissingModelsComplete = useCallback(async () => {
     const allDownloaded = await areRequiredModelsDownloaded()

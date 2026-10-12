@@ -14,6 +14,8 @@ type CheckpointDescriptor = ApiSuccessOf<'describeCheckpoints'>['checkpoints'][n
 
 interface ModelDownloadsCardProps {
   modelPackItems: CheckpointDescriptor[]
+  modelPackSelected: boolean
+  onToggleModelPack: () => void
   encoderItem: CheckpointDescriptor | null
   encoderSelected: boolean
   onToggleEncoder: () => void
@@ -43,6 +45,8 @@ const LORAS_GROUP_INFO =
 
 export function ModelDownloadsCard({
   modelPackItems,
+  modelPackSelected,
+  onToggleModelPack,
   encoderItem,
   encoderSelected,
   onToggleEncoder,
@@ -96,16 +100,21 @@ export function ModelDownloadsCard({
           {modelPackItems.length > 0 && (
             <DownloadGroup
               title="LTX 2.5"
-              checked
-              checkboxDisabled
+              checked={modelPackSelected}
+              onToggle={onToggleModelPack}
+              infoContent={
+                'Runs video generation on this machine. Skip it if you generate through OpenRouter or another API — you can install it later in Settings.'
+              }
               meta={
                 modelPackItems.every((item) => item.downloaded)
                   ? 'Installed'
-                  : formatBytes(
-                      modelPackItems
-                        .filter((item) => !item.downloaded)
-                        .reduce((sum, item) => sum + item.size_bytes, 0),
-                    )
+                  : modelPackSelected
+                    ? formatBytes(
+                        modelPackItems
+                          .filter((item) => !item.downloaded)
+                          .reduce((sum, item) => sum + item.size_bytes, 0),
+                      )
+                    : 'Skipped (API generation)'
               }
             >
               {modelPackItems.map((item) => (

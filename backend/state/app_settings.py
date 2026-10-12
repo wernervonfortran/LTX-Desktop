@@ -96,6 +96,10 @@ class AppSettings(SettingsBaseModel):
     # preference is on, generations route to OpenRouter instead of local/LTX-API.
     openrouter_api_key: str = ""
     user_prefers_openrouter_video_generations: bool = True
+    # OpenRouter fork: explicit opt-out of the local LTX model pack in first-run
+    # Setup. Persisted so the boot missing-models gate stays open on machines that
+    # generate through OpenRouter/API instead of local checkpoints.
+    skip_local_model_downloads: bool = False
     fal_api_key: str = ""
     user_prefers_fal_api_image_generations: bool = False
     use_local_text_encoder: bool = False
@@ -199,6 +203,7 @@ class SettingsResponse(SettingsBaseModel):
     user_prefers_ltx_api_video_generations: bool = False
     has_openrouter_api_key: bool = False
     user_prefers_openrouter_video_generations: bool = True
+    skip_local_model_downloads: bool = False
     has_fal_api_key: bool = False
     user_prefers_fal_api_image_generations: bool = False
     use_local_text_encoder: bool = False
