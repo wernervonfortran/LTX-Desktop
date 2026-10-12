@@ -8,6 +8,7 @@ export interface ImageModelSpecItem {
   or_model_id: string
   display_name: string
   price_per_image?: number | null
+  price_note?: string | null
   supported_aspect_ratios?: string[]
   supports_resolution?: boolean
   supports_edit?: boolean

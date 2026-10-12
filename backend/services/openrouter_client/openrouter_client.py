@@ -42,6 +42,7 @@ class OpenRouterImageModel:
     supported_aspect_ratios: tuple[str, ...] = ()
     supports_resolution: bool = False
     max_input_references: int = 0
+    price_note: str | None = None
 
 
 ProgressCallback = Callable[[str, int], None]

@@ -234,6 +234,7 @@ class OpenRouterImageModelSpecItem(BaseModel):
     or_model_id: str
     display_name: str
     price_per_image: float | None = None
+    price_note: str | None = None
     supported_aspect_ratios: list[str] = Field(default_factory=list)
     supports_resolution: bool = False
     supports_edit: bool = False

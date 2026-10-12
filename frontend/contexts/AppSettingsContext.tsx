@@ -112,8 +112,11 @@ function normalizeAppSettings(data: Partial<AppSettings>): AppSettings {
     diffusionStageCacheEnabled: data.diffusionStageCacheEnabled ?? DEFAULT_APP_SETTINGS.diffusionStageCacheEnabled,
     hasLtxApiKey: data.hasLtxApiKey ?? DEFAULT_APP_SETTINGS.hasLtxApiKey,
     userPrefersLtxApiVideoGenerations: data.userPrefersLtxApiVideoGenerations ?? DEFAULT_APP_SETTINGS.userPrefersLtxApiVideoGenerations,
-    hasOpenRouterApiKey: data.hasOpenrouterApiKey ?? DEFAULT_APP_SETTINGS.hasOpenRouterApiKey,
-    userPrefersOpenRouterVideoGenerations: data.userPrefersOpenrouterVideoGenerations ?? DEFAULT_APP_SETTINGS.userPrefersOpenRouterVideoGenerations,
+    // Wire names differ from the local interface: pydantic title-cases each
+    // underscore part, so the backend sends hasOpenrouterApiKey /
+    // userPrefersOpenrouterVideoGenerations (lowercase r).
+    hasOpenRouterApiKey: (data as { hasOpenrouterApiKey?: boolean }).hasOpenrouterApiKey ?? DEFAULT_APP_SETTINGS.hasOpenRouterApiKey,
+    userPrefersOpenRouterVideoGenerations: (data as { userPrefersOpenrouterVideoGenerations?: boolean }).userPrefersOpenrouterVideoGenerations ?? DEFAULT_APP_SETTINGS.userPrefersOpenRouterVideoGenerations,
     skipLocalModelDownloads: data.skipLocalModelDownloads ?? DEFAULT_APP_SETTINGS.skipLocalModelDownloads,
     hasFalApiKey: data.hasFalApiKey ?? DEFAULT_APP_SETTINGS.hasFalApiKey,
     userPrefersFalApiImageGenerations: data.userPrefersFalApiImageGenerations ?? DEFAULT_APP_SETTINGS.userPrefersFalApiImageGenerations,

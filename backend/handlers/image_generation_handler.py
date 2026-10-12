@@ -99,6 +99,7 @@ class ImageGenerationHandler(StateHandlerBase):
                 supported_aspect_ratios=list(m.supported_aspect_ratios),
                 supports_resolution=m.supports_resolution,
                 supports_edit=m.max_input_references > 0,
+                price_note=m.price_note,
             )
             for m in self._openrouter_image_models(api_key)
         ]

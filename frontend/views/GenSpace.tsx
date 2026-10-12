@@ -1103,7 +1103,9 @@ function PromptBar({
                       value: item.model,
                       label: item.price_per_image
                         ? `${item.display_name} · $${item.price_per_image.toFixed(3)}/img`
-                        : item.display_name,
+                        : item.price_note
+                          ? `${item.display_name} · ${item.price_note}`
+                          : item.display_name,
                     })),
                 ]}
                 trigger={

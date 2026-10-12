@@ -12,6 +12,7 @@ import base64
 import json
 import logging
 import time
+from dataclasses import replace
 from typing import Any, cast
 
 from services.http_client.http_client import HTTPClient, HttpTransportError
@@ -346,4 +347,77 @@ class OpenRouterClientImpl:
                     max_input_references=max_refs,
                 )
             )
+        _enrich_image_prices(self._http, api_key, out)
         return out
+
+
+def _endpoint_pricing(http: HTTPClient, api_key: str, model_id: str) -> list[dict[str, JSONValue]]:
+    resp = http.get(
+        f"{BASE_URL}/images/models/{model_id}/endpoints",
+        headers={"Authorization": f"Bearer {api_key}"},
+        timeout=15,
+    )
+    payload = resp.json()
+    eps = payload.get("endpoints") if isinstance(payload, dict) else None
+    if not isinstance(eps, list):
+        return []
+    entries: list[dict[str, JSONValue]] = [
+        e for e in cast(list[JSONValue], eps) if isinstance(e, dict)
+    ]
+
+    # Cheapest provider's pricing table (OpenRouter routes to the cheapest anyway).
+    def _cheapest(entry: dict[str, JSONValue]) -> float:
+        pr = entry.get("pricing")
+        if not isinstance(pr, list):
+            return float("inf")
+        costs: list[float] = []
+        for p in cast(list[JSONValue], pr):
+            if isinstance(p, dict):
+                cost = p.get("cost_usd")
+                if isinstance(cost, (int, float)):
+                    costs.append(float(cost))
+        return min(costs) if costs else float("inf")
+
+    best = min(entries, key=_cheapest, default=None)
+    if best is None:
+        return []
+    pr = best.get("pricing")
+    if not isinstance(pr, list):
+        return []
+    return [p for p in cast(list[JSONValue], pr) if isinstance(p, dict)]
+
+
+def _enrich_image_prices(http: HTTPClient, api_key: str, models: list[OpenRouterImageModel]) -> None:
+    """Fill price_per_image from GET /images/models/{id}/endpoints.
+
+    The image catalog itself carries no pricing; the per-model endpoints
+    endpoint does. unit=image entries are exact per-image costs; unit=token
+    models (per-token billing) get a price_note instead so the picker never
+    shows a misleading flat price. Mutates in place; a failed lookup just
+    leaves the price unset.
+    """
+    for i, m in enumerate(models):
+        if m.price_per_image is not None:
+            continue
+        try:
+            pricing = _endpoint_pricing(http, api_key, m.id)
+        except (HttpTransportError, OpenRouterClientError, ValueError) as e:
+            logger.debug("openrouter image price lookup failed for %s: %s", m.id, e)
+            continue
+        per_image: float | None = None
+        per_mtok: float | None = None
+        for p in pricing:
+            try:
+                cost = float(p["cost_usd"])  # type: ignore[arg-type]
+            except (KeyError, TypeError, ValueError):
+                continue
+            unit = p.get("unit")
+            billable = str(p.get("billable") or "")
+            if unit == "image" and billable == "output_image" and cost > 0:
+                per_image = cost if per_image is None else min(per_image, cost)
+            elif unit == "token" and billable == "output_image" and cost > 0:
+                per_mtok = cost * 1_000_000 if per_mtok is None else min(per_mtok, cost * 1_000_000)
+        if per_image is not None:
+            models[i] = replace(m, price_per_image=per_image)
+        elif per_mtok is not None:
+            models[i] = replace(m, price_note=f"~${per_mtok:,.2f}/M out-tokens")

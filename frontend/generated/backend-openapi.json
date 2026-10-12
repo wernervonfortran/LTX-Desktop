@@ -6140,6 +6140,17 @@
             "title": "Or Model Id",
             "type": "string"
           },
+          "price_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Note"
+          },
           "price_per_image": {
             "anyOf": [
               {

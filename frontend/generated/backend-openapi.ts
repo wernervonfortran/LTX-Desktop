@@ -3446,6 +3446,8 @@ export interface components {
             model: string;
             /** Or Model Id */
             or_model_id: string;
+            /** Price Note */
+            price_note?: string | null;
             /** Price Per Image */
             price_per_image?: number | null;
             /** Supported Aspect Ratios */
