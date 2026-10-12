@@ -290,6 +290,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/generate-image/models-specs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Route Generate Image Model Specs
+         * @description GET /api/generate-image/models-specs (OpenRouter fork: hosted image models).
+         */
+        get: operations["route_generate_image_model_specs_api_generate_image_models_specs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/generate/cancel": {
         parameters: {
             query?: never;
@@ -2111,6 +2131,14 @@ export interface components {
              */
             status: "complete";
         };
+        /** GenerateImageModelsSpecsResponse */
+        GenerateImageModelsSpecsResponse: {
+            /**
+             * Openrouter Models
+             * @default []
+             */
+            openrouter_models: components["schemas"]["OpenRouterImageModelSpecItem"][];
+        };
         /** GenerateImageRequest */
         GenerateImageRequest: {
             /**
@@ -2120,6 +2148,8 @@ export interface components {
             height: number;
             /** Imagepath */
             imagePath?: string | null;
+            /** Model */
+            model?: string | null;
             /**
              * Numimages
              * @default 1
@@ -3404,6 +3434,32 @@ export interface components {
             driver_mib?: number | null;
             /** Recommended Max Mib */
             recommended_max_mib?: number | null;
+        };
+        /**
+         * OpenRouterImageModelSpecItem
+         * @description One hosted image model for the GenSpace image picker (OpenRouter fork).
+         */
+        OpenRouterImageModelSpecItem: {
+            /** Display Name */
+            display_name: string;
+            /** Model */
+            model: string;
+            /** Or Model Id */
+            or_model_id: string;
+            /** Price Per Image */
+            price_per_image?: number | null;
+            /** Supported Aspect Ratios */
+            supported_aspect_ratios?: string[];
+            /**
+             * Supports Edit
+             * @default false
+             */
+            supports_edit: boolean;
+            /**
+             * Supports Resolution
+             * @default false
+             */
+            supports_resolution: boolean;
         };
         /**
          * OutpaintPads
@@ -4822,6 +4878,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GenerateImageCompleteResponse"] | components["schemas"]["GenerateImageCancelledResponse"];
+                };
+            };
+            /** @description Client Error */
+            "4XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPErrorResponse"];
+                };
+            };
+            /** @description Server Error */
+            "5XX": {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPErrorResponse"];
+                };
+            };
+        };
+    };
+    route_generate_image_model_specs_api_generate_image_models_specs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GenerateImageModelsSpecsResponse"];
                 };
             };
             /** @description Client Error */

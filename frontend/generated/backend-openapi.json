@@ -2304,6 +2304,20 @@
         "title": "GenerateImageCompleteResponse",
         "type": "object"
       },
+      "GenerateImageModelsSpecsResponse": {
+        "properties": {
+          "openrouter_models": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/OpenRouterImageModelSpecItem"
+            },
+            "title": "Openrouter Models",
+            "type": "array"
+          }
+        },
+        "title": "GenerateImageModelsSpecsResponse",
+        "type": "object"
+      },
       "GenerateImageRequest": {
         "properties": {
           "height": {
@@ -2322,6 +2336,17 @@
               }
             ],
             "title": "Imagepath"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
           },
           "numImages": {
             "default": 1,
@@ -6100,6 +6125,58 @@
         "title": "MpsMemoryResponse",
         "type": "object"
       },
+      "OpenRouterImageModelSpecItem": {
+        "description": "One hosted image model for the GenSpace image picker (OpenRouter fork).",
+        "properties": {
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "or_model_id": {
+            "title": "Or Model Id",
+            "type": "string"
+          },
+          "price_per_image": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Price Per Image"
+          },
+          "supported_aspect_ratios": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Supported Aspect Ratios",
+            "type": "array"
+          },
+          "supports_edit": {
+            "default": false,
+            "title": "Supports Edit",
+            "type": "boolean"
+          },
+          "supports_resolution": {
+            "default": false,
+            "title": "Supports Resolution",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "model",
+          "or_model_id",
+          "display_name"
+        ],
+        "title": "OpenRouterImageModelSpecItem",
+        "type": "object"
+      },
       "OutpaintPads": {
         "description": "Per-edge pixels to add around the source video (extend-only, so all ≥ 0).\n\nThe +100% cap (each ≤ the source's axis size) needs the source dimensions, so it's enforced\nin `_outpaint_canvas`, not here.",
         "properties": {
@@ -8699,6 +8776,48 @@
           }
         },
         "summary": "Route Generate Image",
+        "tags": [
+          "image"
+        ]
+      }
+    },
+    "/api/generate-image/models-specs": {
+      "get": {
+        "description": "GET /api/generate-image/models-specs (OpenRouter fork: hosted image models).",
+        "operationId": "route_generate_image_model_specs_api_generate_image_models_specs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateImageModelsSpecsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "4XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            },
+            "description": "Client Error"
+          },
+          "5XX": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPErrorResponse"
+                }
+              }
+            },
+            "description": "Server Error"
+          }
+        },
+        "summary": "Route Generate Image Model Specs",
         "tags": [
           "image"
         ]

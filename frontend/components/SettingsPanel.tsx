@@ -38,6 +38,8 @@ export interface GenerationSettings {
   imageSteps: number
   variations?: number  // Number of image variations to generate
   imageEditStrength?: number  // Denoising strength when editing an existing image
+  // OpenRouter fork: "or:<model-id>" selects a hosted image model; undefined = local Z-Image.
+  imageModel?: string
 }
 
 interface SettingsPanelProps {

@@ -39,6 +39,9 @@ class OpenRouterImageModel:
     id: str
     display_name: str
     price_per_image: float | None
+    supported_aspect_ratios: tuple[str, ...] = ()
+    supports_resolution: bool = False
+    max_input_references: int = 0
 
 
 ProgressCallback = Callable[[str, int], None]
@@ -70,6 +73,9 @@ class OpenRouterClient(Protocol):
         api_key: str,
         model: str,
         prompt: str,
-        size: str | None = None,
-        image_data_urls: list[str] | None = None,
+        aspect_ratio: str | None = None,
+        resolution: str | None = None,
+        input_data_urls: list[str] | None = None,
     ) -> bytes: ...
+
+    def list_image_models(self, *, api_key: str) -> list[OpenRouterImageModel]: ...

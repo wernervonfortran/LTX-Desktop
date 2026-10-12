@@ -427,7 +427,9 @@ export function useGeneration(): UseGenerationReturn {
       }))
     }
 
-    if (shouldImageGenerateWithFalApi) {
+    // OpenRouter fork: a hosted "or:<model>" selection needs no FAL key.
+    const usesOpenRouterImage = (settings.imageModel ?? '').startsWith('or:')
+    if (shouldImageGenerateWithFalApi && !usesOpenRouterImage) {
       const settingsResult = await ApiClient.getSettings()
       const hasFalApiKey = settingsResult.ok ? settingsResult.data.hasFalApiKey : appSettings.hasFalApiKey
       if (!hasFalApiKey) {
@@ -505,6 +507,8 @@ export function useGeneration(): UseGenerationReturn {
           // requires it — send the default rather than the edit-only setting when not editing.
           strength: isEditing ? (settings.imageEditStrength ?? 0.6) : 0.6,
           ...(isEditing ? { imagePath: editSource } : {}),
+          // OpenRouter fork: "or:<model>" routes to a hosted image model server-side.
+          ...(settings.imageModel ? { model: settings.imageModel } : {}),
         }
         const result = await ApiClient.generateImage(imageRequest)
 

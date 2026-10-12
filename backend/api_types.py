@@ -225,6 +225,26 @@ GenerateImageResponse: TypeAlias = (
 )
 
 
+class OpenRouterImageModelSpecItem(BaseModel):
+    """One hosted image model for the GenSpace image picker (OpenRouter fork)."""
+
+    model_config = ConfigDict(strict=True)
+
+    model: str  # "or:<model-id>"
+    or_model_id: str
+    display_name: str
+    price_per_image: float | None = None
+    supported_aspect_ratios: list[str] = Field(default_factory=list)
+    supports_resolution: bool = False
+    supports_edit: bool = False
+
+
+class GenerateImageModelsSpecsResponse(BaseModel):
+    model_config = ConfigDict(strict=True)
+
+    openrouter_models: list[OpenRouterImageModelSpecItem] = []
+
+
 class CancelCancellingResponse(BaseModel):
     status: Literal["cancelling"]
     id: str
@@ -617,6 +637,9 @@ class GenerateImageRequest(BaseModel):
     numImages: int = Field(default=1, ge=1)
     imagePath: str | None = None
     strength: float = Field(default=0.6, ge=0.0, le=1.0)
+    # OpenRouter fork: "or:<model-id>" selects a hosted image model; None keeps the
+    # local Z-Image / FAL path.
+    model: str | None = None
 
 
 def _default_model_types() -> set[ModelCheckpointID]:

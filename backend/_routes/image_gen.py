@@ -10,7 +10,11 @@ from _routes._analytics import (
     pixel_resolution,
     run_tracked_generation,
 )
-from api_types import GenerateImageRequest, GenerateImageResponse
+from api_types import (
+    GenerateImageModelsSpecsResponse,
+    GenerateImageRequest,
+    GenerateImageResponse,
+)
 from state import get_state_service
 from app_handler import AppHandler
 
@@ -39,4 +43,12 @@ def route_generate_image(
         details,
         lambda: handler.image_generation.generate(req),
     )
+
+
+@router.get("/generate-image/models-specs", response_model=GenerateImageModelsSpecsResponse)
+def route_generate_image_model_specs(
+    handler: AppHandler = Depends(get_state_service),
+) -> GenerateImageModelsSpecsResponse:
+    """GET /api/generate-image/models-specs (OpenRouter fork: hosted image models)."""
+    return handler.image_generation.get_image_model_specs()
 

@@ -17,6 +17,7 @@ import { useFixedMenu } from '../hooks/use-fixed-menu'
 import { setActiveGenerationOwner, hasValidBaselineId } from '../lib/generation-recovery'
 import { withGenerationActive, canCancelLocalJob } from '../lib/generation-active'
 import { useVideoGenerationModelSpecs } from '../hooks/use-video-generation-model-specs'
+import { useImageGenerationModelSpecs, type ImageModelSpecItem } from '../hooks/use-image-generation-model-specs'
 import { createLocalGenerationError, generationErrorFromApiFailure, type GenerationError } from '../lib/generation-errors'
 import {
   useRetake,
@@ -553,6 +554,7 @@ function PromptBar({
   promptOptional,
   isLocalMode,
   imageUsesFalApi,
+  imageModelSpecs,
   availableLoras,
   selectedLoras,
   onSelectedLorasChange,
@@ -620,6 +622,7 @@ function PromptBar({
     variations: number
     audio?: boolean
     imageEditStrength?: number
+    imageModel?: string
   }
   onSettingsChange: (settings: any) => void
   videoModelSpecs: VideoGenerationModelSpecItem[]
@@ -628,6 +631,8 @@ function PromptBar({
   promptOptional?: boolean
   isLocalMode?: boolean
   imageUsesFalApi?: boolean
+  // OpenRouter fork: hosted image models for the image-mode model picker.
+  imageModelSpecs?: ImageModelSpecItem[]
   availableLoras?: ApiSuccessOf<'listModels'>['models']
   selectedLoras?: LoraSelection[]
   onSelectedLorasChange?: (loras: LoraSelection[]) => void
@@ -1084,11 +1089,39 @@ function PromptBar({
         <IcLoraSettingsControls {...icLoraControls} />
         ) : mode === 'image' ? (
           <>
-            {/* Model indicator */}
-            <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-[color-mix(in_srgb,var(--semantic-bg-action-secondary-enabled)_50%,transparent)]">
-              <ZitIcon className="h-3.5 w-3.5" />
-              <span className="text-fg-secondary font-medium">Z-Image Turbo{imageUsesFalApi ? ' (API)' : ''}</span>
-            </div>
+            {/* Model indicator / picker (OpenRouter fork: hosted image models selectable) */}
+            {imageModelSpecs && imageModelSpecs.length > 0 ? (
+              <SettingsDropdown
+                title="MODEL"
+                value={settings.imageModel ?? 'local'}
+                onChange={(v) => onSettingsChange({ ...settings, imageModel: v === 'local' ? undefined : v })}
+                options={[
+                  { value: 'local', label: `Z-Image Turbo${imageUsesFalApi ? ' (API)' : ''}` },
+                  ...imageModelSpecs
+                    .filter((item) => !isEditingImage || item.supports_edit)
+                    .map((item) => ({
+                      value: item.model,
+                      label: item.price_per_image
+                        ? `${item.display_name} · $${item.price_per_image.toFixed(3)}/img`
+                        : item.display_name,
+                    })),
+                ]}
+                trigger={
+                  <>
+                    <ZitIcon className="h-3.5 w-3.5" />
+                    <span className="text-fg-secondary font-medium">
+                      {imageModelSpecs.find((item) => item.model === settings.imageModel)?.display_name
+                        ?? `Z-Image Turbo${imageUsesFalApi ? ' (API)' : ''}`}
+                    </span>
+                  </>
+                }
+              />
+            ) : (
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-[color-mix(in_srgb,var(--semantic-bg-action-secondary-enabled)_50%,transparent)]">
+                <ZitIcon className="h-3.5 w-3.5" />
+                <span className="text-fg-secondary font-medium">Z-Image Turbo{imageUsesFalApi ? ' (API)' : ''}</span>
+              </div>
+            )}
 
             {isEditingImage ? (
               // Edit runs at the source image's resolution — resolution/ratio don't apply.
@@ -1354,6 +1387,7 @@ const DEFAULT_VIDEO_SETTINGS = {
   variations: 1,
   audio: true,
   imageEditStrength: 0.6,
+  imageModel: undefined as string | undefined,
 }
 
 export function GenSpace() {
@@ -1383,6 +1417,8 @@ export function GenSpace() {
     isLoading: isLoadingVideoGenerationModelSpecs,
     errorMessage: videoGenerationModelSpecsErrorMessage,
   } = useVideoGenerationModelSpecs()
+  // OpenRouter fork: hosted image models for the image-mode picker.
+  const { modelSpecs: imageModelSpecs } = useImageGenerationModelSpecs()
   const [mode, setMode] = useState<GenSpaceMode>('video')
   const [prompt, setPrompt] = useState('')
   const promptRef = useRef(prompt)
@@ -2925,8 +2961,12 @@ export function GenSpace() {
         imageSteps: editSource ? IMAGE_STEPS_EDIT : IMAGE_STEPS_GENERATE,
         variations: settings.variations,
         imageEditStrength: settings.imageEditStrength,
+        // OpenRouter fork: carry the hosted image model selection through to the request.
+        ...(settings.imageModel ? { imageModel: settings.imageModel } : {}),
       }
-      const modelLabel = resolvePipelineDisplayName(videoModelSpecs, imageSettings.model) ?? undefined
+      const modelLabel = settings.imageModel
+        ? imageModelSpecs.find((item) => item.model === settings.imageModel)?.display_name ?? settings.imageModel
+        : resolvePipelineDisplayName(videoModelSpecs, imageSettings.model) ?? undefined
       generateSubmissionRef.current = {
         kind: 'image',
         prompt,
@@ -3424,6 +3464,7 @@ export function GenSpace() {
                 promptOptional={promptOptional}
                 isLocalMode={isLocalMode}
                 imageUsesFalApi={shouldImageGenerateWithFalApi}
+                imageModelSpecs={imageModelSpecs}
                 availableLoras={localLoras}
                 selectedLoras={selectedLoras}
                 onSelectedLorasChange={setSelectedLoras}

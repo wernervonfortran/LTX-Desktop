@@ -472,6 +472,8 @@ export function createApiClient(fetchImpl: BackendFetch) {
 
     generateImage: makeEndpointClient(fetchImpl, '/api/generate-image', 'post'),
 
+    getGenerateImageModelSpecs: makeEndpointClient(fetchImpl, '/api/generate-image/models-specs', 'get'),
+
     enhancePrompt: makeEndpointClient(fetchImpl, '/api/enhance-prompt', 'post', {
       exactErrorStatuses: [404, 409] as const,
     }),

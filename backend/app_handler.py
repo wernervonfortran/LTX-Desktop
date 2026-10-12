@@ -333,6 +333,7 @@ class AppHandler:
             pipelines_handler=self.pipelines,
             config=config,
             zit_api_client=zit_api_client,
+            openrouter_client=openrouter_client,
         )
 
         self.health = HealthHandler(

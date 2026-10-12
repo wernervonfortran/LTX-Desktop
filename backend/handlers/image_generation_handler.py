@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import base64
 import io
 import logging
+import time
 import uuid
 from collections.abc import Callable
 from datetime import datetime
@@ -17,17 +19,29 @@ from _routes._errors import HTTPError
 from api_types import (
     GenerateImageCancelledResponse,
     GenerateImageCompleteResponse,
+    GenerateImageModelsSpecsResponse,
     GenerateImageRequest,
     GenerateImageResponse,
+    OpenRouterImageModelSpecItem,
 )
 from handlers.base import StateHandlerBase
 from handlers.generation_handler import GenerationHandler
 from handlers.pipelines_handler import PipelinesHandler
 from services.generation_interrupt import is_cancel_exception
 from services.interfaces import ZitAPIClient
+from services.openrouter_client.openrouter_client import (
+    OpenRouterClient,
+    OpenRouterClientError,
+    OpenRouterImageModel,
+)
+from runtime_config.openrouter_specs import (
+    OPENROUTER_PIPELINE_PREFIX,
+    is_openrouter_pipeline,
+    or_model_id_from_pipeline,
+)
 from server_utils.heartbeat import log_heartbeat
 from server_utils.media_validation import validate_image_file
-from server_utils.oriented_image import open_oriented_rgb
+from server_utils.oriented_image import open_oriented_rgb, oriented_image_payload
 from services.services_utils import clamp_strength, compute_edit_dimensions, effective_edit_steps
 from state.app_settings import should_image_generate_with_fal_api
 from state.app_state_types import AppState
@@ -47,13 +61,171 @@ class ImageGenerationHandler(StateHandlerBase):
         pipelines_handler: PipelinesHandler,
         config: RuntimeConfig,
         zit_api_client: ZitAPIClient,
+        openrouter_client: OpenRouterClient,
     ) -> None:
         super().__init__(state, lock, config)
         self._generation = generation_handler
         self._pipelines = pipelines_handler
         self._zit_api_client = zit_api_client
+        self._openrouter = openrouter_client
+        self._openrouter_image_cache: tuple[float, str, list[OpenRouterImageModel]] = (0.0, "", [])
+
+    # ---- OpenRouter fork: hosted image models ------------------------------------
+
+    def _openrouter_image_models(self, api_key: str) -> list[OpenRouterImageModel]:
+        """TTL-cached image catalog (5 min) so opening the picker doesn't refetch."""
+        now = time.monotonic()
+        stamp, key, models = self._openrouter_image_cache
+        if key == api_key and models and (now - stamp) < 300.0:
+            return models
+        try:
+            models = self._openrouter.list_image_models(api_key=api_key)
+        except OpenRouterClientError as e:
+            logger.warning("openrouter image catalog fetch failed: %s", e.detail)
+            return models  # stale beats empty; empty only if we never fetched
+        self._openrouter_image_cache = (now, api_key, models)
+        return models
+
+    def get_image_model_specs(self) -> GenerateImageModelsSpecsResponse:
+        api_key = self.state.app_settings.openrouter_api_key.strip()
+        if not api_key:
+            return GenerateImageModelsSpecsResponse()
+        items = [
+            OpenRouterImageModelSpecItem(
+                model=f"{OPENROUTER_PIPELINE_PREFIX}{m.id}",
+                or_model_id=m.id,
+                display_name=m.display_name,
+                price_per_image=m.price_per_image,
+                supported_aspect_ratios=list(m.supported_aspect_ratios),
+                supports_resolution=m.supports_resolution,
+                supports_edit=m.max_input_references > 0,
+            )
+            for m in self._openrouter_image_models(api_key)
+        ]
+        return GenerateImageModelsSpecsResponse(openrouter_models=items)
+
+    @staticmethod
+    def _closest_aspect_ratio(width: int, height: int, allowed: tuple[str, ...]) -> str | None:
+        if not allowed:
+            return None
+        want = width / height
+
+        def parse(r: str) -> float | None:
+            try:
+                a, _, b = r.partition(":")
+                return float(a) / float(b)
+            except (ValueError, ZeroDivisionError):
+                return None
+
+        best: tuple[float, str] | None = None
+        for r in allowed:
+            v = parse(r)
+            if v is None:
+                continue
+            err = abs(v - want)
+            if best is None or err < best[0]:
+                best = (err, r)
+        return best[1] if best else None
+
+    @staticmethod
+    def _image_resolution(width: int, height: int) -> str:
+        long_side = max(width, height)
+        if long_side >= 3000:
+            return "4K"
+        if long_side >= 1800:
+            return "2K"
+        return "1K"
+
+    def _generate_openrouter_image(
+        self,
+        req: GenerateImageRequest,
+        *,
+        num_images: int,
+    ) -> GenerateImageResponse:
+        or_model_id = or_model_id_from_pipeline(req.model or "")
+        if or_model_id is None:  # pragma: no cover - routed by caller
+            raise HTTPError(422, "Not an OpenRouter image model", code="INVALID_IMAGE_GENERATION_SPEC")
+        api_key = self.state.app_settings.openrouter_api_key.strip()
+        if not api_key:
+            raise HTTPError(500, "OPENROUTER_API_KEY_NOT_CONFIGURED")
+
+        catalog = {m.id: m for m in self._openrouter_image_models(api_key)}
+        model = catalog.get(or_model_id)
+        if model is None:
+            raise HTTPError(422, f"Unknown OpenRouter image model: {or_model_id}", code="INVALID_IMAGE_GENERATION_SPEC")
+
+        edit_path: Path | None = None
+        if req.imagePath is not None:
+            if model.max_input_references < 1:
+                raise HTTPError(
+                    422,
+                    f"Model {or_model_id} does not support image editing (no input references)",
+                    code="INVALID_IMAGE_GENERATION_SPEC",
+                )
+            edit_path = validate_image_file(req.imagePath)
+
+        aspect = self._closest_aspect_ratio(req.width, req.height, model.supported_aspect_ratios)
+        resolution = self._image_resolution(req.width, req.height) if model.supports_resolution else None
+
+        generation_id = uuid.uuid4().hex[:8]
+        output_paths: list[Path] = []
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        try:
+            self._generation.start_api_generation(generation_id)
+            self._generation.update_progress("validating_request", 5, None, None)
+
+            input_urls: list[str] | None = None
+            if edit_path is not None:
+                self._generation.update_progress("uploading_image", 20, None, None)
+                payload, mime = oriented_image_payload(edit_path)
+                input_urls = [f"data:{mime};base64,{base64.b64encode(payload).decode('ascii')}"]
+
+            for idx in range(num_images):
+                self._generation.raise_if_cancelled()
+                self._generation.update_progress("inference", 15 + int((idx / num_images) * 60), None, None)
+                image_bytes = self._openrouter.generate_image(
+                    api_key=api_key,
+                    model=or_model_id,
+                    prompt=req.prompt,
+                    aspect_ratio=aspect,
+                    resolution=resolution,
+                    input_data_urls=input_urls,
+                )
+                self._generation.raise_if_cancelled()
+                self._generation.update_progress("downloading_output", 75 + int(((idx + 1) / num_images) * 20), None, None)
+                output_path = self.config.outputs_dir / f"openrouter_image_{timestamp}_{uuid.uuid4().hex[:8]}.png"
+                output_path.write_bytes(image_bytes)
+                output_paths.append(output_path)
+
+            self._generation.update_progress("complete", 100, None, None)
+            self._generation.complete_generation([str(p) for p in output_paths])
+            return GenerateImageCompleteResponse(status="complete", image_paths=[str(p) for p in output_paths])
+        except HTTPError as e:
+            self._generation.fail_generation(e.detail)
+            for path in output_paths:
+                path.unlink(missing_ok=True)
+            raise
+        except OpenRouterClientError as e:
+            self._generation.fail_generation(e.detail)
+            for path in output_paths:
+                path.unlink(missing_ok=True)
+            raise HTTPError(e.status_code or 502, e.detail) from e
+        except Exception as e:
+            self._generation.fail_generation(str(e))
+            for path in output_paths:
+                path.unlink(missing_ok=True)
+            if is_cancel_exception(e):
+                logger.info("Image generation cancelled by user")
+                return GenerateImageCancelledResponse(status="cancelled")
+            raise HTTPError(500, str(e)) from e
 
     def generate(self, req: GenerateImageRequest) -> GenerateImageResponse:
+        # OpenRouter fork: an "or:<model>" selection routes to a hosted image model
+        # regardless of local/API settings (mirrors the video handler).
+        if req.model is not None and is_openrouter_pipeline(req.model):
+            with self._generation.reserved_generation_start():
+                return self._generate_openrouter_image(req, num_images=max(1, min(12, req.numImages)))
+
         with self._generation.reserved_generation_start():
 
             width = (req.width // 16) * 16

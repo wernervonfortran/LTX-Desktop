@@ -1327,10 +1327,13 @@ class FakeOpenRouterClient:
         self.list_video_models_calls: list[dict[str, Any]] = []
         self.generate_video_calls: list[dict[str, Any]] = []
         self.generate_image_calls: list[dict[str, Any]] = []
+        self.list_image_models_calls: list[dict[str, Any]] = []
         self.raise_on_list_video_models: Exception | None = None
         self.raise_on_generate_video: Exception | None = None
         self.raise_on_generate_image: Exception | None = None
+        self.raise_on_list_image_models: Exception | None = None
         self.video_models: list[Any] = []
+        self.image_models: list[Any] = []
         self.video_result = b"fake-openrouter-video"
         self.image_result = b"fake-openrouter-image"
 
@@ -1354,6 +1357,12 @@ class FakeOpenRouterClient:
         if self.raise_on_generate_image is not None:
             raise self.raise_on_generate_image
         return self.image_result
+
+    def list_image_models(self, *, api_key: str) -> list[Any]:
+        self.list_image_models_calls.append({"api_key": api_key})
+        if self.raise_on_list_image_models is not None:
+            raise self.raise_on_list_image_models
+        return list(self.image_models)
 
 
 @dataclass
