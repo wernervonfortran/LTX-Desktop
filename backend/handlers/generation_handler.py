@@ -204,7 +204,17 @@ class GenerationHandler(StateHandlerBase):
         # EXPERIMENTAL: see start_generation -- an API generation doesn't build a
         # local transformer itself, but evicting here still releases VRAM held by
         # a previous local generation's cached build.
-        diffusion_stage_cache.evict()
+        # Fork hardening: a poisoned CUDA context (an async OOM from an earlier local
+        # attempt on a saturated GPU surfaces at the next synchronize inside
+        # cleanup_memory) must NOT kill an API generation, which needs no GPU at all.
+        try:
+            diffusion_stage_cache.evict()
+        except Exception:
+            logger.warning(
+                "GPU cache eviction before API generation failed (poisoned CUDA context?); "
+                "continuing — the API path does not use the GPU.",
+                exc_info=True,
+            )
         generation_interrupt.clear()
 
         self.state.active_generation = ApiGeneration(
