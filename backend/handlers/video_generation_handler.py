@@ -15,6 +15,7 @@ from pathlib import Path
 from threading import RLock
 from typing import TYPE_CHECKING
 
+import io
 from PIL import Image
 
 from frame_math import (
@@ -87,7 +88,11 @@ from server_utils.media_validation import (
     validate_audio_file,
     validate_image_file,
 )
-from server_utils.oriented_image import open_oriented_rgb, oriented_image_file, oriented_image_payload
+from server_utils.oriented_image import (
+    open_oriented_image,
+    open_oriented_rgb,
+    oriented_image_file,
+)
 from services.denoising_progress import distilled_total_steps
 from services.generation_interrupt import GenerationCancelledError, is_cancel_exception
 from services.interfaces import LTXAPIClient
@@ -1252,8 +1257,25 @@ class VideoGenerationHandler(StateHandlerBase):
     # ---- OpenRouter fork ----
 
     def _openrouter_image_data_url(self, path: Path) -> str:
-        payload, mime = oriented_image_payload(path)
-        return f"data:{mime};base64,{base64.b64encode(payload).decode('ascii')}"
+        # Providers disagree on accepted frame formats: Google Veo takes only
+        # JPEG/PNG and rejects alpha channels, while Kling and others also eat
+        # WEBP/GIF/BMP. Normalize every frame to JPEG at this single send
+        # chokepoint — one format every provider accepts, and late
+        # post-submit "Unsupported image format" failures disappear.
+        # EXIF orientation is baked in; alpha is flattened onto white.
+        image = open_oriented_image(path)
+        if image.mode in ("RGBA", "LA", "PA") or (
+            image.mode == "P" and "transparency" in image.info
+        ):
+            rgba = image.convert("RGBA")
+            base = Image.new("RGB", rgba.size, (255, 255, 255))
+            base.paste(rgba, mask=rgba.getchannel("A"))
+            image = base
+        elif image.mode != "RGB":
+            image = image.convert("RGB")
+        buffer = io.BytesIO()
+        image.save(buffer, format="JPEG", quality=95)
+        return f"data:image/jpeg;base64,{base64.b64encode(buffer.getvalue()).decode('ascii')}"
 
     def _validate_openrouter_request(self, req: GenerateVideoRequest) -> str:
         """Return the OpenRouter model id, or raise. Validates against the live catalog."""

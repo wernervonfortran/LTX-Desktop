@@ -224,6 +224,29 @@ class TestOpenRouterGenerate:
         assert call["first_frame_data_url"].startswith("data:image/")
         assert call["last_frame_data_url"].startswith("data:image/")
 
+    def test_frame_images_are_normalized_to_jpeg(self, client, test_state, tmp_path):
+        from PIL import Image
+
+        _use_openrouter(test_state)
+        webp = tmp_path / "frame.webp"
+        rgba = tmp_path / "alpha.png"
+        Image.new("RGB", (64, 36), "red").save(webp, format="WEBP")
+        Image.new("RGBA", (64, 36), (0, 255, 0, 128)).save(rgba)
+        r = client.post(
+            "/api/generate",
+            json=_or_request(imagePath=str(webp), lastImagePath=str(rgba)),
+        )
+        assert r.status_code == 200
+        call = test_state.openrouter_client.generate_video_calls[-1]
+        # every provider accepts JPEG; alpha is flattened, not rejected
+        assert call["first_frame_data_url"].startswith("data:image/jpeg;base64,")
+        assert call["last_frame_data_url"].startswith("data:image/jpeg;base64,")
+        import base64
+        from io import BytesIO
+
+        img = Image.open(BytesIO(base64.b64decode(call["last_frame_data_url"].split(",", 1)[1])))
+        assert img.format == "JPEG" and img.mode == "RGB"
+
     def test_model_without_frame_support_rejects_image(self, client, test_state, tmp_path):
         from PIL import Image
 
