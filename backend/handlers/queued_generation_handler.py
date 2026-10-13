@@ -30,6 +30,7 @@ from _routes._errors import HTTPError
 from handlers.base import resolve_models_dir
 from handlers.hf_auth_utils import optional_hf_token
 from runtime_config.accelerator import accelerator_backend
+from runtime_config.openrouter_specs import is_openrouter_pipeline
 from runtime_config.video_job_budget import (
     LOCAL_GENERATION_UNSUPPORTED,
     LOCAL_GENERATION_UNSUPPORTED_MESSAGE,
@@ -258,10 +259,20 @@ class QueuedGenerationHandler:
         audio = self._require_audio_asset(req.inputs.audio.assetId, slot="audio")
         if audio.metadata.mediaType != "audio":
             raise HTTPError(422, "INVALID_AUDIO_ASSET", code="INVALID_GENERATION_SPEC")
-        params = self._derive_local_a2v(
-            req.params,
-            audio.metadata.metadata.durationMs,
-        )
+        if is_openrouter_pipeline(req.params.model):
+            # OpenRouter A2V: no local checkpoint envelope; numFrames is nominal
+            # (the OR path derives duration from the audio at send time).
+            duration_s = audio.metadata.metadata.durationMs / 1000.0
+            frames = max(9, 8 * max(1, round(duration_s * req.params.fps / 8)) + 1)
+            params = AudioToVideoParams(
+                **req.params.model_dump(mode="python"),
+                numFrames=frames,
+            )
+        else:
+            params = self._derive_local_a2v(
+                req.params,
+                audio.metadata.metadata.durationMs,
+            )
         if req.inputs.startFrame is not None:
             self._require_image_asset(req.inputs.startFrame.assetId, slot="startFrame")
         spec: dict[str, JsonValue] = {

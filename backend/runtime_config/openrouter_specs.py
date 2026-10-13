@@ -86,6 +86,18 @@ def spec_from_openrouter_model(model: OpenRouterVideoModel) -> LTXVideoGeneratio
     }
     has_first = "first_frame" in model.supported_frame_images
     has_last = "last_frame" in model.supported_frame_images
+    # The Home A2V screen is locked to the 540p/24 cell, but OpenRouter
+    # catalogs ship 480p/720p/1080p. Synthesize the 540p row from the nearest
+    # supported resolution so the picker offers the model; the send path maps
+    # the cell back to a real resolution before submit.
+    a2v_map: dict[LTXVideoGenResolution, LTXVideoGenerationResolutionSpec] = {}
+    if model.accepts_audio_reference:
+        a2v_map = dict(resolution_map)
+        if "540p" not in a2v_map:
+            for proxy in ("720p", "480p", "1080p"):
+                if proxy in a2v_map:
+                    a2v_map["540p"] = a2v_map[proxy]
+                    break
     price_hint = model.min_price_per_second
     display = model.display_name
     # Frame capability so the picker shows what each model takes before
@@ -109,10 +121,13 @@ def spec_from_openrouter_model(model: OpenRouterVideoModel) -> LTXVideoGeneratio
         spec=LTXVideoGenerationSpec(
             display_name=display,
             supported_resolutions_durations=resolution_map,
+            a2v_supported_resolutions_durations=(
+                a2v_map
+            ),
             capabilities=LTXOfferingCapabilitiesSpec(
                 t2v=True,
                 i2v=has_first,
-                a2v=False,
+                a2v=model.accepts_audio_reference,
                 ic_lora=False,
                 retake=False,
                 extend=False,

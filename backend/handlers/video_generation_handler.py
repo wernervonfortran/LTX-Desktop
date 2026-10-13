@@ -93,12 +93,45 @@ from server_utils.oriented_image import (
     open_oriented_rgb,
     oriented_image_file,
 )
+from server_utils.public_upload import PublicUploadError, upload_public_file
 from services.denoising_progress import distilled_total_steps
 from services.generation_interrupt import GenerationCancelledError, is_cancel_exception
 from services.interfaces import LTXAPIClient
 from services.ltx_api_client.ltx_api_client import LTXAPIClientError
 from services.ltx_api_client.ltx_api_errors import map_ltx_api_client_error, missing_ltx_api_key_error
-from services.openrouter_client.openrouter_client import OpenRouterClient, OpenRouterClientError
+from services.openrouter_client.openrouter_client import (
+    OpenRouterClient,
+    OpenRouterClientError,
+    OpenRouterVideoModel,
+)
+
+
+def _or_a2v_proxy_resolution(model: OpenRouterVideoModel) -> str | None:
+    """Real catalog resolution to stand in for A2V's fixed 540p cell."""
+    for proxy in ("720p", "480p", "1080p"):
+        if proxy in model.supported_resolutions:
+            return proxy
+    return None
+
+
+def _or_a2v_snap_duration(seconds: float, model: OpenRouterVideoModel) -> int:
+    """Nearest envelope duration to the audio track (ties prefer the longer)."""
+    return min(model.supported_durations, key=lambda d: (abs(d - seconds), -d))
+
+
+def _probe_audio_seconds(path: str | Path) -> float:
+    import av
+
+    with av.open(str(path)) as container:
+        stream = container.streams.audio[0]
+        if stream.duration is not None and stream.time_base is not None:
+            return float(stream.duration * stream.time_base)
+        if container.duration is not None:
+            return float(container.duration) / av.time_base
+    raise HTTPError(
+        422, "Could not read the audio duration; trim or re-encode the track.",
+        code="INVALID_VIDEO_GENERATION_SPEC",
+    )
 from runtime_config.openrouter_specs import (
     OpenRouterCatalogCache,
     is_openrouter_pipeline,
@@ -428,7 +461,10 @@ class VideoGenerationHandler(StateHandlerBase):
         # them to the OpenRouter path instead of requiring a local checkpoint.
         if is_openrouter_pipeline(req.model):
             return self._generate_openrouter(
-                req, output_path=output_path, generation_id=generation_id
+                req,
+                output_path=output_path,
+                generation_id=generation_id,
+                a2v_audio_duration_seconds=a2v_audio_duration_seconds,
             )
         # Local-only Home/Remote entry: checkpoint is required. GenSpace
         # ``generate()`` still uses Settings via ``_generate_local_reserved_validated``.
@@ -1291,11 +1327,7 @@ class VideoGenerationHandler(StateHandlerBase):
             )
         image_path = normalize_optional_path(req.imagePath)
         last_image_path = normalize_optional_path(req.lastImagePath)
-        if normalize_optional_path(req.audioPath):
-            raise HTTPError(
-                422, "Audio-to-video is not supported by OpenRouter models.",
-                code="INVALID_VIDEO_GENERATION_SPEC",
-            )
+        audio_path = normalize_optional_path(req.audioPath)
         if req.keyframes:
             raise HTTPError(
                 422, "Multi-keyframe generation is not supported by OpenRouter models.",
@@ -1314,12 +1346,32 @@ class VideoGenerationHandler(StateHandlerBase):
                 f"Unknown OpenRouter model '{or_model_id}'. Refresh the model list and retry.",
                 code="INVALID_VIDEO_GENERATION_SPEC",
             )
-        if req.duration is None:
+        if audio_path is not None:
+            if not catalog_model.accepts_audio_reference:
+                audio_models = [m.display_name for m in raw_models if m.accepts_audio_reference]
+                raise HTTPError(
+                    422,
+                    f"Audio-to-video is not supported by '{catalog_model.display_name}'. "
+                    + (
+                        f"Audio-capable models: {', '.join(audio_models)}."
+                        if audio_models
+                        else "No OpenRouter model currently accepts audio."
+                    ),
+                    code="INVALID_VIDEO_GENERATION_SPEC",
+                )
+            if image_path is None:
+                raise HTTPError(
+                    422,
+                    "OpenRouter audio-to-video needs a reference image alongside the audio "
+                    "(the provider rejects audio-only requests).",
+                    code="INVALID_VIDEO_GENERATION_SPEC",
+                )
+        if req.duration is None and audio_path is None:
             raise HTTPError(
                 422, "OpenRouter models require an explicit duration.",
                 code="INVALID_VIDEO_GENERATION_SPEC",
             )
-        if req.duration not in catalog_model.supported_durations:
+        if req.duration is not None and req.duration not in catalog_model.supported_durations:
             raise HTTPError(
                 422,
                 f"Duration {req.duration}s not supported by '{catalog_model.display_name}' "
@@ -1327,13 +1379,15 @@ class VideoGenerationHandler(StateHandlerBase):
                 code="INVALID_VIDEO_GENERATION_SPEC",
             )
         if req.resolution not in catalog_model.supported_resolutions:
-            raise HTTPError(
-                422,
-                f"Resolution {req.resolution} not supported by '{catalog_model.display_name}' "
-                f"(supported: {', '.join(catalog_model.supported_resolutions)})",
-                code="INVALID_VIDEO_GENERATION_SPEC",
-            )
-        if image_path and "first_frame" not in catalog_model.supported_frame_images:
+            # A2V's fixed 540p cell maps to the nearest real catalog resolution.
+            if not (audio_path is not None and _or_a2v_proxy_resolution(catalog_model) is not None):
+                raise HTTPError(
+                    422,
+                    f"Resolution {req.resolution} not supported by '{catalog_model.display_name}' "
+                    f"(supported: {', '.join(catalog_model.supported_resolutions)})",
+                    code="INVALID_VIDEO_GENERATION_SPEC",
+                )
+        if image_path and "first_frame" not in catalog_model.supported_frame_images and audio_path is None:
             raise HTTPError(
                 422,
                 f"'{catalog_model.display_name}' does not support image-to-video.",
@@ -1367,12 +1421,14 @@ class VideoGenerationHandler(StateHandlerBase):
         *,
         output_path: Path | None = None,
         generation_id: str | None = None,
+        a2v_audio_duration_seconds: float | None = None,
     ) -> GenerateVideoResponse:
         or_model_id = self._validate_openrouter_request(req)
         api_key = self.state.app_settings.openrouter_api_key.strip()
 
         image_path = normalize_optional_path(req.imagePath)
         last_image_path = normalize_optional_path(req.lastImagePath)
+        audio_path = normalize_optional_path(req.audioPath)
 
         # GenSpace's generate() must reserve; the queue runner already claimed the job
         # and passes generation_id + output_path (mirrors the local pipeline split).
@@ -1399,19 +1455,52 @@ class VideoGenerationHandler(StateHandlerBase):
                         validate_image_file(last_image_path)
                     )
 
+                audio_public_url: str | None = None
+                audio_path = normalize_optional_path(req.audioPath)
+                if audio_path is not None:
+                    self._generation.update_progress("uploading_audio", 40, None, None)
+                    try:
+                        audio_public_url = upload_public_file(validate_audio_file(audio_path))
+                    except PublicUploadError as e:
+                        raise HTTPError(
+                            502,
+                            f"Audio upload failed: {e}. OpenRouter audio references need a "
+                            "public HTTPS URL; check your internet connection.",
+                            code="OPENROUTER_AUDIO_UPLOAD_FAILED",
+                        ) from e
+
                 self._generation.raise_if_cancelled()
                 self._generation.update_progress("inference", 55, None, None)
+
+                # A2V: duration follows the audio track, resolution maps the fixed
+                # 540p cell back to a resolution the provider actually serves.
+                catalog_model = self._openrouter_cache.find(or_model_id)
+                effective_duration = req.duration
+                effective_resolution = req.resolution
+                if catalog_model is not None:
+                    if effective_duration is None and audio_path is not None:
+                        seconds = (
+                            a2v_audio_duration_seconds
+                            if a2v_audio_duration_seconds is not None
+                            else _probe_audio_seconds(audio_path)
+                        )
+                        effective_duration = _or_a2v_snap_duration(seconds, catalog_model)
+                    if effective_resolution not in catalog_model.supported_resolutions:
+                        proxy = _or_a2v_proxy_resolution(catalog_model)
+                        if proxy is not None:
+                            effective_resolution = proxy
 
                 video_bytes = self._openrouter.generate_video(
                     api_key=api_key,
                     model=or_model_id,
                     prompt=req.prompt,
-                    duration=int(req.duration) if req.duration is not None else None,
-                    resolution=req.resolution,
+                    duration=int(effective_duration) if effective_duration is not None else None,
+                    resolution=effective_resolution,
                     aspect_ratio=req.aspectRatio,
                     generate_audio=bool(req.audio),
                     first_frame_data_url=first_data_url,
                     last_frame_data_url=last_data_url,
+                    audio_public_url=audio_public_url,
                     seed=req.seed,
                     on_progress=lambda phase, pct: self._generation.update_progress(phase, pct, None, None),
                     raise_if_cancelled=self._generation.raise_if_cancelled,

@@ -169,6 +169,7 @@ class OpenRouterClientImpl:
                     min_price_per_second=_min_price_per_second(item.get("pricing_skus")),
                     supports_audio=bool(item.get("supports_audio", False)),
                     supports_frame_combo=combo,
+                    accepts_audio_reference=mid.startswith("bytedance/seedance-2"),
                 )
             )
         return models
@@ -187,6 +188,7 @@ class OpenRouterClientImpl:
         generate_audio: bool,
         first_frame_data_url: str | None = None,
         last_frame_data_url: str | None = None,
+        audio_public_url: str | None = None,
         seed: int | None = None,
         on_progress: ProgressCallback | None = None,
         raise_if_cancelled: Any | None = None,
@@ -205,24 +207,43 @@ class OpenRouterClientImpl:
         if seed is not None:
             payload["seed"] = seed
         frame_images: list[dict[str, JSONValue]] = []
-        if first_frame_data_url:
-            frame_images.append(
-                {
-                    "type": "image_url",
-                    "image_url": {"url": first_frame_data_url},
-                    "frame_type": "first_frame",
-                }
+        input_references: list[dict[str, JSONValue]] = []
+        if audio_public_url:
+            # a2v path (live-proven 2026-10-13 on seedance-2.0-mini): the image
+            # rides as a reference_image INSIDE input_references next to the
+            # audio; frame_images and audio references are not mixed.
+            input_references.append(
+                {"type": "audio_url", "audio_url": {"url": audio_public_url}}
             )
-        if last_frame_data_url:
-            frame_images.append(
-                {
-                    "type": "image_url",
-                    "image_url": {"url": last_frame_data_url},
-                    "frame_type": "last_frame",
-                }
-            )
+            if first_frame_data_url:
+                input_references.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": first_frame_data_url},
+                        "role": "reference_image",
+                    }
+                )
+        else:
+            if first_frame_data_url:
+                frame_images.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": first_frame_data_url},
+                        "frame_type": "first_frame",
+                    }
+                )
+            if last_frame_data_url:
+                frame_images.append(
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": last_frame_data_url},
+                        "frame_type": "last_frame",
+                    }
+                )
         if frame_images:
             payload["frame_images"] = cast(JSONValue, frame_images)
+        if input_references:
+            payload["input_references"] = cast(JSONValue, input_references)
 
         logger.info(
             "openrouter submit: model=%s duration=%s resolution=%s frames=%d",

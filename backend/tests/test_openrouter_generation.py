@@ -53,6 +53,20 @@ _NO_FRAMES = OpenRouterVideoModel(
     supports_audio=False,
 )
 
+# Seedance-2.x behaviour (live probe 2026-10-13): accepts audio_url + image
+# reference; audio alone is rejected by the provider.
+_AUDIO = OpenRouterVideoModel(
+    id="test/audio-capable",
+    display_name="Audio Capable",
+    supported_resolutions=("480p", "720p"),
+    supported_durations=(4, 5),
+    supported_aspect_ratios=("16:9",),
+    supported_frame_images=("first_frame",),
+    min_price_per_second=0.035,
+    supports_audio=False,
+    accepts_audio_reference=True,
+)
+
 def test_min_price_per_second_unit_handling():
     from services.openrouter_client.openrouter_client_impl import _min_price_per_second
 
@@ -75,8 +89,19 @@ def _use_openrouter(test_state, *, key: str = "or-key") -> None:
     test_state.state.app_settings.openrouter_api_key = key
     test_state.state.app_settings.user_prefers_openrouter_video_generations = True
     fake = test_state.openrouter_client
-    fake.video_models = [_MINI, _NO_FRAMES, _SINGLE_KEY]
+    fake.video_models = [_MINI, _NO_FRAMES, _SINGLE_KEY, _AUDIO]
     fake.video_result = _MP4_BYTES
+
+
+def _write_wav(path) -> None:
+    """Minimal valid 8-bit mono WAV so validate_audio_file's sniffing passes."""
+    import wave
+
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(1)
+        w.setsampwidth(1)
+        w.setframerate(8000)
+        w.writeframes(bytes(160))
 
 
 def _or_request(**overrides) -> dict:
@@ -130,6 +155,21 @@ class TestOpenRouterModelSpecs:
         assert mini["spec"]["capabilities"]["last_frame"] is True
         no_frames = next(i for i in payload["api_models"] if i["pipeline"] == "or:test/no-frames")
         assert no_frames["spec"]["capabilities"]["last_frame"] is False
+
+    def test_audio_capable_model_gets_synthesized_540p_a2v_cell(self, client, test_state):
+        _use_openrouter(test_state)
+        r = client.get("/api/generate/models-specs")
+        assert r.status_code == 200
+        audio = next(
+            i for i in r.json()["api_models"] if i["pipeline"] == "or:test/audio-capable"
+        )
+        assert audio["spec"]["capabilities"]["a2v"] is True
+        a2v_map = audio["spec"]["a2v_supported_resolutions_durations"]
+        # catalog has 480p/720p only; the A2V screen's fixed 540p/24 cell is synthesized
+        assert "540p" in a2v_map
+        assert a2v_map["540p"]["fps_to_durations"]["24"] == [4, 5]
+        mini = next(i for i in r.json()["api_models"] if i["pipeline"] == "or:test/mini")
+        assert mini["spec"]["a2v_supported_resolutions_durations"] == {}
 
     def test_no_openrouter_rows_without_key(self, client, test_state):
         test_state.state.app_settings.openrouter_api_key = ""
@@ -286,6 +326,104 @@ class TestOpenRouterGenerate:
                 "Mini Test."
             ),
         )
+
+    def test_a2v_rejected_on_audio_incapable_model(self, client, test_state, tmp_path):
+        from PIL import Image
+
+        _use_openrouter(test_state)
+        first = tmp_path / "first.png"
+        audio = tmp_path / "tone.wav"
+        Image.new("RGB", (64, 36), "red").save(first)
+        _write_wav(audio)
+        r = client.post(
+            "/api/generate",
+            json=_or_request(imagePath=str(first), audioPath=str(audio)),
+        )
+        assert_http_error(
+            r,
+            status_code=422,
+            code="INVALID_VIDEO_GENERATION_SPEC",
+            message=(
+                "Audio-to-video is not supported by 'Mini Test'. "
+                "Audio-capable models: Audio Capable."
+            ),
+        )
+
+    def test_a2v_requires_reference_image(self, client, test_state, tmp_path):
+        _use_openrouter(test_state)
+        audio = tmp_path / "tone.wav"
+        _write_wav(audio)
+        r = client.post(
+            "/api/generate",
+            json=_or_request(model="or:test/audio-capable", audioPath=str(audio)),
+        )
+        assert_http_error(
+            r,
+            status_code=422,
+            code="INVALID_VIDEO_GENERATION_SPEC",
+            message=(
+                "OpenRouter audio-to-video needs a reference image alongside the audio "
+                "(the provider rejects audio-only requests)."
+            ),
+        )
+
+    def test_a2v_uploads_audio_and_passes_public_url(self, client, test_state, tmp_path, monkeypatch):
+        from PIL import Image
+
+        import handlers.video_generation_handler as vgh
+
+        _use_openrouter(test_state)
+        first = tmp_path / "first.png"
+        audio = tmp_path / "tone.wav"
+        Image.new("RGB", (64, 36), "red").save(first)
+        _write_wav(audio)
+
+        uploads: list[str] = []
+
+        def fake_upload(path):
+            uploads.append(str(path))
+            return "https://files.example.org/tone.wav"
+
+        monkeypatch.setattr(vgh, "upload_public_file", fake_upload)
+        r = client.post(
+            "/api/generate",
+            json=_or_request(model="or:test/audio-capable", imagePath=str(first), audioPath=str(audio)),
+        )
+        assert r.status_code == 200
+        assert uploads == [str(audio)]
+        call = test_state.openrouter_client.generate_video_calls[-1]
+        assert call["audio_public_url"] == "https://files.example.org/tone.wav"
+        # the image still rides as a JPEG-normalized data URL
+        assert call["first_frame_data_url"].startswith("data:image/jpeg;base64,")
+
+    def test_a2v_540p_cell_maps_and_duration_snaps_to_audio(self, client, test_state, tmp_path, monkeypatch):
+        from PIL import Image
+
+        import handlers.video_generation_handler as vgh
+
+        _use_openrouter(test_state)
+        first = tmp_path / "first.png"
+        audio = tmp_path / "tone.wav"
+        Image.new("RGB", (64, 36), "red").save(first)
+        _write_wav(audio)
+        monkeypatch.setattr(
+            vgh, "upload_public_file", lambda path: "https://files.example.org/tone.wav"
+        )
+        r = client.post(
+            "/api/generate",
+            json=_or_request(
+                model="or:test/audio-capable",
+                resolution="540p",
+                duration=None,
+                imagePath=str(first),
+                audioPath=str(audio),
+            ),
+        )
+        assert r.status_code == 200
+        call = test_state.openrouter_client.generate_video_calls[-1]
+        # 540p cell -> nearest real catalog resolution; duration follows the audio
+        assert call["resolution"] == "720p"
+        assert call["duration"] == 4
 
     def test_client_error_maps_to_http_error(self, client, test_state):
         _use_openrouter(test_state)

@@ -37,6 +37,14 @@ class OpenRouterVideoModel:
     # slots; MiniMax H3/H3 Max list both but reject the pair at submit time
     # ("single keyframe image") — confirmed by live probe 2026-10-13.
     supports_frame_combo: bool = False
+    # True when the model accepts an audio_url input_reference alongside an
+    # image reference (audio-to-video). The catalog exposes no such field;
+    # the rule comes from OpenRouter's video docs ("BytePlus Seedance
+    # generation 2 and later") plus a live probe 2026-10-13: seedance-2.0-mini
+    # accepted image + audio (public HTTPS URL only — data: URLs and the
+    # OpenRouter Files API both fail at the provider), and the provider
+    # rejects audio as the only reference input.
+    accepts_audio_reference: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,6 +76,7 @@ class OpenRouterClient(Protocol):
         generate_audio: bool,
         first_frame_data_url: str | None = None,
         last_frame_data_url: str | None = None,
+        audio_public_url: str | None = None,
         seed: int | None = None,
         on_progress: ProgressCallback | None = None,
         raise_if_cancelled: Callable[[], None] | None = None,

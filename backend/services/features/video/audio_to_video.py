@@ -10,6 +10,7 @@ from api_types import (
     GenerateVideoRequest,
 )
 from _routes._errors import HTTPError
+from runtime_config.openrouter_specs import is_openrouter_pipeline
 from services.features.video.image_to_video import (
     AssetResolver,
     find_closest_aspect_ratio_option,
@@ -87,9 +88,10 @@ class AudioToVideoExecutor:
         req = GenerateVideoRequest.model_validate(payload)
         output = require_video_output(outputs)
         try:
-            self._video_generation.validate_local_a2v_request(
-                params, audio_duration_ms=_audio_duration_ms(audio)
-            )
+            if not is_openrouter_pipeline(params.model):
+                self._video_generation.validate_local_a2v_request(
+                    params, audio_duration_ms=_audio_duration_ms(audio)
+                )
             result = self._video_generation.generate_local_reserved(
                 req,
                 generation_id=generation.id,
